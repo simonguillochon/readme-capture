@@ -133,7 +133,7 @@ Le champ « LinkedIn de l'auteur » SHALL être facultatif, et, s'il est rempli,
 - **ET** le bouton « Ajouter » reste inactif
 
 ### Requirement: Suivre l'onglet actif tant que les champs ne sont pas modifiés
-Quand l'utilisatrice active un autre onglet ou qu'une nouvelle page se charge dans l'onglet actif, le panneau SHALL pré-remplir à nouveau « Titre », « URL », « Auteur » et « LinkedIn de l'auteur » depuis cette page, sauf si l'utilisatrice a modifié l'un de ces quatre champs, et SHALL conserver la langue et les thèmes choisis.
+Tant que l'item n'est pas créé, quand l'utilisatrice active un autre onglet ou qu'une nouvelle page se charge dans l'onglet actif, le panneau SHALL pré-remplir à nouveau « Titre », « URL », « Auteur » et « LinkedIn de l'auteur » depuis cette page, sauf si l'utilisatrice a modifié l'un de ces quatre champs, et SHALL conserver la langue et les thèmes choisis. Une fois l'item créé, le panneau SHALL ne plus pré-remplir aucun champ.
 
 #### Scenario: Nominal — Changer d'onglet sans avoir modifié les champs
 - **ÉTANT DONNÉ QUE** le panneau est pré-rempli depuis un premier article
@@ -148,6 +148,11 @@ Quand l'utilisatrice active un autre onglet ou qu'une nouvelle page se charge da
 - **LORSQUE** elle active l'onglet d'un second article
 - **ALORS** « Titre » contient toujours « Ma lecture du jour »
 - **ET** « URL », « Auteur » et « LinkedIn de l'auteur » contiennent toujours les valeurs du premier article
+
+#### Scenario: Alternatif — Changer d'onglet après la création de l'item
+- **ÉTANT DONNÉ QUE** l'item a été créé depuis un premier article sans que l'utilisatrice modifie aucun champ
+- **LORSQUE** elle active l'onglet d'un second article
+- **ALORS** « Titre », « URL », « Auteur » et « LinkedIn de l'auteur » contiennent toujours les valeurs du premier article
 
 ### Requirement: Nettoyer une URL saisie à la main
 Quand l'utilisatrice quitte le champ « URL » après l'avoir modifié, le panneau SHALL remplacer sa valeur par l'URL nettoyée selon la capacité `url-normalization`, si la valeur est une URL valide.
