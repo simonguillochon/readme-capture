@@ -1,0 +1,166 @@
+<script setup lang="ts">
+// Formulaire de préparation de l'item (design.md, décisions 8 et 9). Rien n'est écrit dans le stockage local.
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import DsButton from '@/components/DsButton.vue';
+import DsCheckbox from '@/components/DsCheckbox.vue';
+import DsChoiceGroup from '@/components/DsChoiceGroup.vue';
+import DsField from '@/components/DsField.vue';
+import DsInput from '@/components/DsInput.vue';
+import DsMessage from '@/components/DsMessage.vue';
+import { isFormValid, type Language } from '@/capture/form-validation';
+import { readActiveTabPage } from '@/capture/page-snapshot';
+import { normalizeLinkedinProfile } from '@/capture/linkedin-profile';
+import { buildPrefill } from '@/capture/prefill';
+import { normalizeUrl } from '@/capture/url-normalization';
+import type { NotionConfig } from '@/config/notion-config';
+import { errorMessage } from '@/notion/errors';
+import { fetchThemes } from '@/notion/themes';
+
+const props = defineProps<{ config: NotionConfig }>();
+
+const LANGUAGES: { value: Language; label: string }[] = [
+  { value: 'fr', label: '🇫🇷 Français' },
+  { value: 'en', label: '🇬🇧 Anglais' },
+  { value: 'es', label: '🇪🇸 Espagnol' },
+];
+
+const title = ref('');
+const url = ref('');
+const author = ref('');
+const authorLinkedin = ref('');
+const language = ref<Language | null>(null);
+const themes = ref<string[]>([]);
+
+const themeOptions = ref<string[]>([]);
+const themesError = ref<string | null>(null);
+
+// Vrai dès la première saisie dans « Titre », « URL », « Auteur » ou « LinkedIn de l'auteur » :
+// le formulaire cesse alors de suivre l'onglet actif.
+const edited = ref(false);
+
+// Numéro de la dernière lecture lancée, pour ignorer le résultat d'une lecture dépassée.
+let lastRead = 0;
+
+/** Pré-remplit « Titre », « URL », « Auteur » et « LinkedIn de l'auteur » depuis l'onglet actif. */
+async function prefillFromActiveTab() {
+  const read = ++lastRead;
+  const page = await readActiveTabPage();
+  if (read !== lastRead || edited.value) return;
+  const prefill = buildPrefill(page?.tab.url ?? '', page?.tab.title ?? '', page?.snapshot ?? null);
+  title.value = prefill.title;
+  url.value = prefill.url;
+  author.value = prefill.author;
+  authorLinkedin.value = prefill.authorLinkedin;
+  urlInvalid.value = false;
+  authorLinkedinInvalid.value = false;
+}
+
+const urlInvalid = ref(false);
+const authorLinkedinInvalid = ref(false);
+
+/** En quittant « URL » : valeur nettoyée si c'est une URL valide, sinon conservée et signalée invalide. */
+function onUrlBlur() {
+  const normalized = normalizeUrl(url.value);
+  urlInvalid.value = normalized === null;
+  if (normalized !== null) url.value = normalized;
+}
+
+/** En quittant « LinkedIn de l'auteur » : même règle avec le profil LinkedIn ; un champ vide n'est jamais invalide. */
+function onAuthorLinkedinBlur() {
+  if (authorLinkedin.value.trim() === '') {
+    authorLinkedinInvalid.value = false;
+    return;
+  }
+  const normalized = normalizeLinkedinProfile(authorLinkedin.value);
+  authorLinkedinInvalid.value = normalized === null;
+  if (normalized !== null) authorLinkedin.value = normalized;
+}
+
+async function loadThemes() {
+  try {
+    themeOptions.value = await fetchThemes(props.config);
+  } catch (error) {
+    themesError.value = errorMessage(error);
+  }
+}
+
+let windowId: number | undefined;
+
+function onTabActivated(activeInfo: { windowId: number }) {
+  if (!edited.value && activeInfo.windowId === windowId) void prefillFromActiveTab();
+}
+
+function onTabUpdated(_tabId: number, changeInfo: { status?: string }, tab: { active: boolean; windowId?: number }) {
+  if (!edited.value && tab.active && tab.windowId === windowId && changeInfo.status === 'complete') void prefillFromActiveTab();
+}
+
+onMounted(async () => {
+  void prefillFromActiveTab();
+  void loadThemes();
+  windowId = (await browser.windows.getCurrent()).id;
+  browser.tabs.onActivated.addListener(onTabActivated);
+  browser.tabs.onUpdated.addListener(onTabUpdated);
+});
+
+onUnmounted(() => {
+  browser.tabs.onActivated.removeListener(onTabActivated);
+  browser.tabs.onUpdated.removeListener(onTabUpdated);
+});
+
+function toggleTheme(theme: string, checked: boolean) {
+  themes.value = checked ? [...themes.value, theme] : themes.value.filter((selected) => selected !== theme);
+}
+
+const valid = computed(() =>
+  isFormValid({
+    title: title.value,
+    url: url.value,
+    author: author.value,
+    authorLinkedin: authorLinkedin.value,
+    language: language.value,
+    themes: themes.value,
+  }),
+);
+</script>
+
+<template>
+  <form class="flex flex-col gap-6" @submit.prevent>
+    <DsField label="Titre" for="title">
+      <DsInput id="title" v-model="title" @input="edited = true" />
+    </DsField>
+    <DsField label="URL" for="url">
+      <DsInput id="url" v-model="url" :invalid="urlInvalid" @input="edited = true" @blur="onUrlBlur" />
+    </DsField>
+    <DsField label="Auteur" for="author">
+      <DsInput id="author" v-model="author" @input="edited = true" />
+    </DsField>
+    <DsField label="LinkedIn de l'auteur" for="author-linkedin">
+      <DsInput
+        id="author-linkedin"
+        v-model="authorLinkedin"
+        :invalid="authorLinkedinInvalid"
+        @input="edited = true"
+        @blur="onAuthorLinkedinBlur"
+      />
+    </DsField>
+    <fieldset class="flex flex-col gap-2">
+      <legend class="mb-2 text-caption text-text-secondary">Langue</legend>
+      <DsChoiceGroup v-model="language" label="Langue" :options="LANGUAGES" />
+    </fieldset>
+    <fieldset class="flex flex-col gap-2">
+      <legend class="mb-2 text-caption text-text-secondary">Thèmes</legend>
+      <DsMessage v-if="themesError" variant="error">{{ themesError }}</DsMessage>
+      <DsCheckbox
+        v-for="theme in themeOptions"
+        v-else
+        :key="theme"
+        :model-value="themes.includes(theme)"
+        :label="theme"
+        @update:model-value="toggleTheme(theme, $event)"
+      />
+    </fieldset>
+    <div>
+      <DsButton :disabled="!valid">Ajouter</DsButton>
+    </div>
+  </form>
+</template>

@@ -17,6 +17,7 @@ export const EXPECTED_PROPERTIES: Record<string, string> = {
   Date: 'date',
   Theme: 'multi_select',
   Description: 'rich_text',
+  'LinkedIn auteur': 'url',
 };
 
 export interface VerifiedDatabase {

@@ -14,8 +14,8 @@ export default defineConfig({
       },
     },
     action: {},
-    permissions: ['storage'],
-    host_permissions: ['https://api.notion.com/*'],
+    permissions: ['storage', 'scripting'],
+    host_permissions: ['<all_urls>'],
   },
   vite: () => ({
     plugins: [tailwindcss()],

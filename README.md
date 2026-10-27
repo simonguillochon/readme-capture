@@ -34,6 +34,16 @@ Le fichier `.env` est ignoré par git. Il ne doit jamais être versionné.
 
 L'extension reste chargée jusqu'à la fermeture de Zen.
 
+## Permissions
+
+L'extension demande :
+
+- `storage` : enregistrer la configuration de la connexion à Notion dans le stockage local de l'extension.
+- `scripting` : lire les métadonnées de la page de l'onglet actif (titre, auteur, données structurées, texte et auteur d'un post LinkedIn ou X) pour pré-remplir le formulaire.
+- L'accès à tous les sites (`<all_urls>`) : nécessaire pour lire la page de l'onglet actif, quel que soit le site, et pour appeler l'API Notion (`https://api.notion.com`).
+
+La page n'est lue que lorsque le panneau est ouvert, et uniquement celle de l'onglet actif de sa fenêtre, en lecture seule. L'extension ne déclare aucun script de contenu : rien n'est ajouté aux pages quand le panneau est fermé.
+
 ## Scripts npm
 
 | Script | Rôle |

@@ -12,7 +12,7 @@ Feature: Contrat de l'API Notion pour la vérification de la connexion (design.m
     And match response.data_sources == '#[_ > 0]'
     And match each response.data_sources == { id: '#string', name: '#string' }
 
-  Scenario: La source de données expose les six propriétés attendues avec leurs types
+  Scenario: La source de données expose les sept propriétés attendues avec leurs types
     Given path 'databases', notionDatabaseId
     When method get
     Then status 200
@@ -27,6 +27,7 @@ Feature: Contrat de l'API Notion pour la vérification de la connexion (design.m
     And match response.properties.Date.type == 'date'
     And match response.properties.Theme.type == 'multi_select'
     And match response.properties.Description.type == 'rich_text'
+    And match response.properties['LinkedIn auteur'].type == 'url'
 
   Scenario: Un jeton invalide renvoie 401
     * configure headers = { 'Authorization': 'Bearer ntn_jeton_invalide', 'Notion-Version': '#(notionVersion)' }

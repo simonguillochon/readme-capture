@@ -16,6 +16,7 @@ const properties = {
   Date: { type: 'date' },
   Theme: { type: 'multi_select' },
   Description: { type: 'rich_text' },
+  'LinkedIn auteur': { type: 'url' },
 };
 
 function okResponse(input: string | URL | Request): Response {

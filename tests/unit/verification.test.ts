@@ -13,6 +13,7 @@ const validProperties = {
   Date: { type: 'date' },
   Theme: { type: 'multi_select' },
   Description: { type: 'rich_text' },
+  'LinkedIn auteur': { type: 'url' },
   Type: { type: 'select' },
 };
 
@@ -53,6 +54,13 @@ describe('verifyDatabase', () => {
   it('échoue quand une propriété attendue est absente', async () => {
     const { Theme: _theme, ...withoutTheme } = validProperties;
     mockNotion(validDatabase, withoutTheme);
+
+    await expect(verifyDatabase('ntn_exemple123', DATABASE_ID)).rejects.toBeInstanceOf(DatabaseStructureError);
+  });
+
+  it('échoue quand la propriété LinkedIn auteur est absente', async () => {
+    const { 'LinkedIn auteur': _authorLinkedin, ...withoutAuthorLinkedin } = validProperties;
+    mockNotion(validDatabase, withoutAuthorLinkedin);
 
     await expect(verifyDatabase('ntn_exemple123', DATABASE_ID)).rejects.toBeInstanceOf(DatabaseStructureError);
   });

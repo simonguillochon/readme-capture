@@ -26,7 +26,8 @@ context: |
 
   Bases Notion :
   - Production : Readme center. Propriétés Title (title), URL (url), Source (text),
-    Date (date), Theme (multi_select), Description (text), Type (select, non utilisée).
+    Date (date), Theme (multi_select), Description (text), LinkedIn auteur (url, facultative),
+    Type (select, non utilisée).
     La langue est portée par l'icône de la page : 🇫🇷, 🇬🇧 ou 🇪🇸.
   - Tests : Readme center (tests), même structure, vide.
 
