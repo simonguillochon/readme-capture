@@ -1,0 +1,61 @@
+schema: spec-driven
+
+context: |
+  Language: fr
+  All artifacts must be written in fr.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Projet : extension Firefox qui capture des contenus de veille vers la base Notion
+  « Readme center ». Usage personnel, navigateur Zen (basé sur Firefox).
+  Référence fonctionnelle : docs/prd/PRD-2610-001.md (PRD au format SCUB, statut REVIEW).
+  Le PRD fait foi pour le pourquoi et le périmètre ; ses sections « Hors scope »
+  et « Hypothèses » s'appliquent à tous les changes.
+
+  Persona : « l'utilisatrice » (féminin par convention SCUB), propriétaire de la base.
+
+  Pile technique actée (ne pas en changer sans accord) :
+  - Extension Firefox Manifest V3, construite avec WXT, Vue 3 et TypeScript strict.
+  - Interface en Tailwind ; valeurs du design system ds-editorial-tech
+    (https://github.com/simonguillochon/ds-editorial-tech) transcrites dans le thème Tailwind.
+    Aucun fichier du dépôt du DS n'est copié ni importé.
+  - Composants Vue codés dans ce dépôt selon la spec des atomes du DS.
+  - Tests unitaires : Vitest. Tests de contrat de l'API Notion : Karate,
+    sur la base Notion « Readme center (tests) ».
+  - Stockage : uniquement le stockage local de l'extension (browser.storage.local).
+  - Dépôt GitHub public : aucun jeton, ID de base ni donnée personnelle dans le code.
+
+  Bases Notion :
+  - Production : Readme center. Propriétés Title (title), URL (url), Source (text),
+    Date (date), Theme (multi_select), Description (text), Type (select, non utilisée).
+    La langue est portée par l'icône de la page : 🇫🇷, 🇬🇧 ou 🇪🇸.
+  - Tests : Readme center (tests), même structure, vide.
+
+rules:
+  proposal:
+    - Ouvrir le fichier par un bloc d'identification en citation avec l'ID de l'US (format US-XX), l'epic, la priorité MoSCoW et le lien vers docs/prd/PRD-2610-001.md.
+    - "Dans « Why », reprendre la formulation SCUB : **En tant que** / **Je souhaite** / **Afin de**, puis une phrase « L'objectif de cette user story est … »."
+    - Ajouter après « Impact » les sections « Maquettes & design » et « Definition of Done » du template d'US SCUB.
+    - "Si des points restent en hypothèse, les lister en tête dans une note « ⚠️ Points en hypothèse à confirmer avant lancement dev »."
+    - Ne jamais inventer une règle métier, un comportement ou un cas d'erreur non validé ; le signaler comme hypothèse.
+  specs:
+    - Une règle métier = une exigence (### Requirement:). Pas de règle composée qui cache deux contraintes.
+    - Chaque exigence est rédigée en français et contient le mot-clé SHALL ou MUST en anglais (ex. « L'extension SHALL … »).
+    - "Chaque exigence porte au moins un scénario ; l'ensemble de la capacité couvre au minimum un scénario nominal, un alternatif et un d'erreur."
+    - "Nommer chaque scénario « Nominal — … », « Alternatif — … » ou « Erreur — … » avec un nom parlant."
+    - "Rédiger les étapes en Gherkin français, une étape par puce : **ÉTANT DONNÉ QUE**, **ET**, **LORSQUE**, **ALORS**, **ET**."
+    - Phrase active avec sujet explicite, valeurs concrètes, niveau métier (pas de détail technique ni d'UI non métier).
+    - Chaque scénario est indépendant et peut servir tel quel de base à un test e2e ultérieur.
+  design:
+    - Lister uniquement des contraintes et décisions validées ; toute décision nouvelle est signalée comme hypothèse à valider par l'utilisatrice.
+    - Citer les versions et dépendances imposées ; aucune dépendance hors de cette liste.
+  tasks:
+    - Chaque tâche indique comment vérifier qu'elle est terminée.
+    - "Les points d'arrêt sont des tâches explicites préfixées par « ⏸ Point d'arrêt » : Claude Code s'arrête, fait un compte rendu et attend l'accord de l'utilisatrice."
+    - Les tests (Vitest, Karate) sont écrits dans le groupe de tâches qui produit le code testé.
+
+operations:
+  apply:
+    guidance:
+      - "Respecter CLAUDE.md : implémenter uniquement les tâches de tasks.md, dans l'ordre."
+      - S'arrêter et poser la question dès qu'un point n'est pas couvert par les specs, le design ou les tâches.
+      - S'arrêter à chaque tâche « ⏸ Point d'arrêt » et attendre l'accord explicite de l'utilisatrice.

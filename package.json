@@ -1,0 +1,26 @@
+{
+  "name": "readme-capture",
+  "description": "Extension Firefox de capture de contenus de veille vers la base Notion Readme center",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt -b firefox",
+    "build": "wxt build -b firefox",
+    "zip": "wxt zip -b firefox",
+    "test": "vitest run",
+    "test:contract": "(test -f tests/contract/.karate/karate-2.1.4.jar || curl -fsSL --create-dirs -o tests/contract/.karate/karate-2.1.4.jar https://github.com/karatelabs/karate/releases/download/v2.1.4/karate-2.1.4.jar) && (set -a; [ ! -f .env ] || . ./.env; set +a; java -jar tests/contract/.karate/karate-2.1.4.jar run -g tests/contract -o tests/contract/.karate/reports tests/contract)",
+    "openspec:validate": "openspec validate --all --strict",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@wxt-dev/module-vue": "^1.0.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "vue": "^3.5.44",
+    "wxt": "^0.21.4"
+  }
+}

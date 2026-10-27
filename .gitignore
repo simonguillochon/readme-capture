@@ -1,0 +1,15 @@
+# Dépendances
+node_modules/
+
+# Sorties de build WXT
+.output/
+.wxt/
+
+# Secrets locaux des tests de contrat
+.env
+
+# JAR Karate téléchargé et rapports des tests de contrat
+tests/contract/.karate/
+
+# Système
+.DS_Store
