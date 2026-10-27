@@ -6,14 +6,16 @@ import DsCheckbox from '@/components/DsCheckbox.vue';
 import DsChoiceGroup from '@/components/DsChoiceGroup.vue';
 import DsField from '@/components/DsField.vue';
 import DsInput from '@/components/DsInput.vue';
+import DsLink from '@/components/DsLink.vue';
 import DsMessage from '@/components/DsMessage.vue';
-import { isFormValid, type Language } from '@/capture/form-validation';
+import { isFormValid, type CaptureFormState, type Language } from '@/capture/form-validation';
 import { readActiveTabPage } from '@/capture/page-snapshot';
 import { normalizeLinkedinProfile } from '@/capture/linkedin-profile';
 import { buildPrefill } from '@/capture/prefill';
 import { normalizeUrl } from '@/capture/url-normalization';
 import type { NotionConfig } from '@/config/notion-config';
 import { errorMessage } from '@/notion/errors';
+import { createItem, findItemByUrl } from '@/notion/items';
 import { fetchThemes } from '@/notion/themes';
 
 const props = defineProps<{ config: NotionConfig }>();
@@ -34,6 +36,11 @@ const themes = ref<string[]>([]);
 const themeOptions = ref<string[]>([]);
 const themesError = ref<string | null>(null);
 
+// Étape de la création de l'item (design.md, décision 7).
+const status = ref<'editing' | 'creating' | 'created'>('editing');
+const createdItemUrl = ref<string | null>(null);
+const creationError = ref<string | null>(null);
+
 // Vrai dès la première saisie dans « Titre », « URL », « Auteur » ou « LinkedIn de l'auteur » :
 // le formulaire cesse alors de suivre l'onglet actif.
 const edited = ref(false);
@@ -41,11 +48,12 @@ const edited = ref(false);
 // Numéro de la dernière lecture lancée, pour ignorer le résultat d'une lecture dépassée.
 let lastRead = 0;
 
-/** Pré-remplit « Titre », « URL », « Auteur » et « LinkedIn de l'auteur » depuis l'onglet actif. */
+/** Pré-remplit « Titre », « URL », « Auteur » et « LinkedIn de l'auteur » depuis l'onglet actif, tant que l'item n'est pas créé. */
 async function prefillFromActiveTab() {
+  if (status.value === 'created') return;
   const read = ++lastRead;
   const page = await readActiveTabPage();
-  if (read !== lastRead || edited.value) return;
+  if (read !== lastRead || edited.value || status.value === 'created') return;
   const prefill = buildPrefill(page?.tab.url ?? '', page?.tab.title ?? '', page?.snapshot ?? null);
   title.value = prefill.title;
   url.value = prefill.url;
@@ -53,16 +61,46 @@ async function prefillFromActiveTab() {
   authorLinkedin.value = prefill.authorLinkedin;
   urlInvalid.value = false;
   authorLinkedinInvalid.value = false;
+  void checkDuplicate(normalizeUrl(prefill.url));
 }
 
 const urlInvalid = ref(false);
 const authorLinkedinInvalid = ref(false);
+
+// URL de la page de l'item qui a déjà cette URL dans Readme center, ou `null`.
+const duplicateUrl = ref<string | null>(null);
+
+// Numéro de la dernière recherche de doublon lancée, pour ignorer le résultat d'une recherche dépassée.
+let lastSearch = 0;
+
+/**
+ * Cherche un item de même URL (design.md, décision 6) ; une URL `null` efface l'avertissement sans recherche.
+ * Une fois l'item créé, aucune recherche n'est plus faite (US-04).
+ */
+async function checkDuplicate(validUrl: string | null) {
+  if (status.value === 'created') return;
+  const search = ++lastSearch;
+  duplicateUrl.value = null;
+  if (validUrl === null) return;
+  let found: string | null;
+  try {
+    found = await findItemByUrl(props.config, validUrl);
+  } catch {
+    found = null;
+  }
+  if (search === lastSearch && status.value !== 'created') duplicateUrl.value = found;
+}
+
+function openPage(pageUrl: string) {
+  void browser.tabs.create({ url: pageUrl });
+}
 
 /** En quittant « URL » : valeur nettoyée si c'est une URL valide, sinon conservée et signalée invalide. */
 function onUrlBlur() {
   const normalized = normalizeUrl(url.value);
   urlInvalid.value = normalized === null;
   if (normalized !== null) url.value = normalized;
+  void checkDuplicate(normalized);
 }
 
 /** En quittant « LinkedIn de l'auteur » : même règle avec le profil LinkedIn ; un champ vide n'est jamais invalide. */
@@ -111,16 +149,31 @@ function toggleTheme(theme: string, checked: boolean) {
   themes.value = checked ? [...themes.value, theme] : themes.value.filter((selected) => selected !== theme);
 }
 
-const valid = computed(() =>
-  isFormValid({
-    title: title.value,
-    url: url.value,
-    author: author.value,
-    authorLinkedin: authorLinkedin.value,
-    language: language.value,
-    themes: themes.value,
-  }),
-);
+const formState = computed<CaptureFormState>(() => ({
+  title: title.value,
+  url: url.value,
+  author: author.value,
+  authorLinkedin: authorLinkedin.value,
+  language: language.value,
+  themes: themes.value,
+}));
+
+const valid = computed(() => isFormValid(formState.value));
+
+/** Crée l'item ; en cas d'échec, le formulaire est conservé et « Ajouter » redevient actif. */
+async function addItem() {
+  if (!valid.value || status.value !== 'editing') return;
+  status.value = 'creating';
+  creationError.value = null;
+  try {
+    const item = await createItem(props.config, formState.value, new Date());
+    createdItemUrl.value = item.url;
+    status.value = 'created';
+  } catch (error) {
+    creationError.value = errorMessage(error);
+    status.value = 'editing';
+  }
+}
 </script>
 
 <template>
@@ -130,6 +183,10 @@ const valid = computed(() =>
     </DsField>
     <DsField label="URL" for="url">
       <DsInput id="url" v-model="url" :invalid="urlInvalid" @input="edited = true" @blur="onUrlBlur" />
+      <template v-if="duplicateUrl">
+        <DsMessage variant="warning">Cette URL existe déjà dans Readme center</DsMessage>
+        <DsLink :href="duplicateUrl" @click.prevent="openPage(duplicateUrl)">Ouvrir l'item existant</DsLink>
+      </template>
     </DsField>
     <DsField label="Auteur" for="author">
       <DsInput id="author" v-model="author" @input="edited = true" />
@@ -159,8 +216,17 @@ const valid = computed(() =>
         @update:model-value="toggleTheme(theme, $event)"
       />
     </fieldset>
-    <div>
-      <DsButton :disabled="!valid">Ajouter</DsButton>
+    <div v-if="status === 'created' && createdItemUrl" class="flex flex-col gap-2">
+      <DsMessage variant="success">Item créé dans Readme center</DsMessage>
+      <DsLink :href="createdItemUrl" @click.prevent="openPage(createdItemUrl)">Ouvrir dans Notion</DsLink>
+    </div>
+    <div v-else class="flex flex-col gap-2">
+      <DsMessage v-if="creationError" variant="error">{{ creationError }}</DsMessage>
+      <div>
+        <DsButton :disabled="!valid || status === 'creating'" @click="addItem">
+          {{ status === 'creating' ? 'Ajout en cours…' : 'Ajouter' }}
+        </DsButton>
+      </div>
     </div>
   </form>
 </template>

@@ -33,3 +33,34 @@ export async function notionGet<T>(token: string, path: string): Promise<T> {
   }
   return (await response.json()) as T;
 }
+
+/** Appel POST à l'API Notion, avec un corps JSON. */
+export function notionPost<T>(token: string, path: string, body: unknown): Promise<T> {
+  return notionSend<T>('POST', token, path, body);
+}
+
+/** Appel PATCH à l'API Notion, avec un corps JSON. */
+export function notionPatch<T>(token: string, path: string, body: unknown): Promise<T> {
+  return notionSend<T>('PATCH', token, path, body);
+}
+
+async function notionSend<T>(method: 'POST' | 'PATCH', token: string, path: string, body: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${NOTION_API_URL}/${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Notion-Version': NOTION_VERSION,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new NotionNetworkError('Requête vers Notion impossible');
+  }
+  if (!response.ok) {
+    throw new NotionHttpError(response.status, response.headers.get('Retry-After'));
+  }
+  return (await response.json()) as T;
+}
