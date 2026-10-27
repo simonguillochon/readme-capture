@@ -60,7 +60,7 @@ Le champ « URL de la base » SHALL accepter uniquement une URL Notion, sur un d
 - **ET** aucune configuration n'est enregistrée
 
 ### Requirement: Vérifier la connexion avant d'enregistrer
-Au clic sur « Enregistrer », l'extension SHALL vérifier auprès de Notion que la base est accessible avec ce jeton et qu'elle contient les propriétés Title, URL, Source, Date, Theme et Description, avec leurs types attendus, et n'enregistrer la configuration que si cette vérification réussit.
+Au clic sur « Enregistrer », l'extension SHALL vérifier auprès de Notion que la base est accessible avec ce jeton et qu'elle contient les propriétés Title, URL, Source, Date, Theme, Description et LinkedIn auteur, avec leurs types attendus, et n'enregistrer la configuration que si cette vérification réussit.
 
 #### Scenario: Nominal — Connexion vérifiée
 - **ÉTANT DONNÉ QUE** l'utilisatrice a saisi un jeton valide et l'URL de la base Readme center
@@ -82,6 +82,12 @@ Au clic sur « Enregistrer », l'extension SHALL vérifier auprès de Notion que
 - **ALORS** un message d'erreur s'affiche
 - **ET** les valeurs saisies restent dans les champs
 - **ET** la configuration précédente reste enregistrée sans modification
+
+#### Scenario: Erreur — Base sans propriété LinkedIn auteur
+- **ÉTANT DONNÉ QUE** l'utilisatrice a saisi l'URL d'une base accessible qui n'a pas de propriété LinkedIn auteur de type URL
+- **LORSQUE** elle clique sur « Enregistrer »
+- **ALORS** le message « La base Notion a changé » s'affiche
+- **ET** aucune configuration n'est enregistrée
 
 ### Requirement: Indiquer la cause d'un échec de vérification
 En cas d'échec de la vérification, la page d'options SHALL afficher le message correspondant à la cause la plus probable : « Connexion impossible » sans réseau, « Jeton Notion invalide » pour un jeton refusé, « Base inaccessible » pour une base introuvable ou non partagée, « La base Notion a changé » pour une propriété manquante ou d'un autre type, « Notion ne répond pas » pour une indisponibilité de Notion.
