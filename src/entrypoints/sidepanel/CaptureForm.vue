@@ -75,7 +75,7 @@ let lastSearch = 0;
 
 /**
  * Cherche un item de même URL (design.md, décision 6) ; une URL `null` efface l'avertissement sans recherche.
- * Une fois l'item créé, aucune recherche n'est plus faite (US-04).
+ * Une fois l'item créé, aucune recherche n'est plus faite (US-05).
  */
 async function checkDuplicate(validUrl: string | null) {
   if (status.value === 'created') return;

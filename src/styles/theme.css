@@ -83,6 +83,9 @@
   --color-warning: #B8860B; /* DS docs/foundations/color.md */
   --color-error: #A52121; /* DS docs/foundations/color.md */
   --color-info: #3A6EA5; /* DS docs/foundations/color.md */
+  --color-success-dark: #6FBF95; /* DS docs/foundations/color.md */
+  --color-error-dark: #E57373; /* DS docs/foundations/color.md */
+  --color-warning-light: #8A6508; /* DS docs/foundations/color.md */
 
   /* Tokens sémantiques — mode clair (mode sombre plus bas) */
   --color-surface-primary: var(--color-neutral-100); /* DS docs/foundations/color.md */
@@ -100,6 +103,10 @@
   --color-accent: var(--color-primary-500); /* DS docs/foundations/color.md */
   --color-accent-hover: var(--color-primary-600); /* DS docs/foundations/color.md */
   --color-accent-subtle: var(--color-primary-50); /* DS docs/foundations/color.md */
+  --color-feedback-success: var(--color-success); /* DS docs/foundations/color.md */
+  --color-feedback-warning: var(--color-warning-light); /* DS docs/foundations/color.md */
+  --color-feedback-error: var(--color-error); /* DS docs/foundations/color.md */
+  --color-feedback-info: var(--color-info); /* DS docs/foundations/color.md */
 
   /* Familles */
   --font-serif: "Instrument Serif", Georgia, serif; /* DS docs/foundations/typography.md */
@@ -207,6 +214,9 @@
     --color-accent: var(--color-primary-400); /* DS docs/foundations/color.md */
     --color-accent-hover: var(--color-primary-300); /* DS docs/foundations/color.md */
     --color-accent-subtle: var(--color-primary-900); /* DS docs/foundations/color.md */
+    --color-feedback-success: var(--color-success-dark); /* DS docs/foundations/color.md */
+    --color-feedback-warning: var(--color-warning); /* DS docs/foundations/color.md */
+    --color-feedback-error: var(--color-error-dark); /* DS docs/foundations/color.md */
   }
 }
 

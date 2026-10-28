@@ -5,7 +5,7 @@ import DsIcon from './DsIcon.vue';
 
 const props = withDefaults(
   defineProps<{
-    icon: 'arrow-right' | 'eye' | 'eye-slash';
+    icon: 'arrow-right' | 'check' | 'eye' | 'eye-slash';
     label: string;
     variant?: 'default' | 'ghost';
     size?: 'md' | 'lg';

@@ -1,15 +1,20 @@
 <script setup lang="ts">
-// Message de succès, d'avertissement ou d'erreur (forme validée par l'utilisatrice, hors DS) : bloc bordé en couleur sémantique.
+// Atome Message du DS (Figma, page Components, nœud 643:31) : texte et bordure dans la couleur feedback de la variante.
+// Usage propre à Readme Capture, validé par l'utilisatrice : pleine largeur au lieu des 320 px de l'atome.
 const props = defineProps<{ variant: 'success' | 'warning' | 'error' }>();
 
-const borders = { success: 'border-success', warning: 'border-warning', error: 'border-error' };
+const colors = {
+  success: 'border-feedback-success text-feedback-success',
+  warning: 'border-feedback-warning text-feedback-warning',
+  error: 'border-feedback-error text-feedback-error',
+};
 </script>
 
 <template>
   <p
     :role="props.variant === 'error' ? 'alert' : 'status'"
-    class="rounded-sm border bg-surface-elevated p-3 text-body-s text-text-primary"
-    :class="borders[props.variant]"
+    class="w-full rounded-sm border bg-surface-elevated p-3 text-body-s"
+    :class="colors[props.variant]"
   >
     <slot />
   </p>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Champ masqué : Input du DS suivi d'un Icon Button ghost md (composition validée par l'utilisatrice, hors DS).
+// Atome Password Input du DS (Figma, page Components, nœud 645:82) : Input suivi d'un Icon Button ghost md.
 import { ref } from 'vue';
 import DsInput from './DsInput.vue';
 import DsIconButton from './DsIconButton.vue';

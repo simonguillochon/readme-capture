@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Libellé de champ : niveau Caption, couleur text-secondary, 8 px au-dessus du champ (choix validé par l'utilisatrice, hors DS).
+// Atome Field label du DS (Figma, page Components, nœud 643:22) : niveau Caption, couleur text-secondary, 8 px au-dessus du champ.
 defineProps<{ label: string; for: string }>();
 </script>
 
