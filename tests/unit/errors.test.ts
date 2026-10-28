@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MESSAGES } from '@/notion/errors';
+import { NotionHttpError, NotionNetworkError } from '@/notion/client';
+import { DatabaseStructureError, itemErrorMessage, MESSAGES } from '@/notion/errors';
 import { verifyConnection } from '@/notion/verification';
 
 const DATABASE_ID = '0123456789abcdef0123456789abcdef';
@@ -67,6 +68,22 @@ describe('correspondance des erreurs', () => {
     mockNotion(Response.json({ ...database, data_sources: [] }));
 
     await expect(verifyConnection('ntn_exemple123', DATABASE_ID)).rejects.toThrow(MESSAGES.changedDatabase);
+  });
+});
+
+describe('itemErrorMessage', () => {
+  it.each([
+    ['HTTP 400 (item à la corbeille)', new NotionHttpError(400, null), MESSAGES.itemNotFound],
+    ['HTTP 404', new NotionHttpError(404, null), MESSAGES.itemNotFound],
+    ['pas de réseau', new NotionNetworkError('NetworkError'), MESSAGES.network],
+    ['HTTP 401', new NotionHttpError(401, null), MESSAGES.invalidToken],
+    ['HTTP 403', new NotionHttpError(403, null), MESSAGES.inaccessibleDatabase],
+    ['HTTP 429', new NotionHttpError(429, '1'), MESSAGES.rateLimited],
+    ['HTTP 500', new NotionHttpError(500, null), MESSAGES.unavailable],
+    ['structure de base modifiée', new DatabaseStructureError(), MESSAGES.changedDatabase],
+    ['réponse illisible', new SyntaxError('JSON'), MESSAGES.inaccessibleDatabase],
+  ])('%s', (_cas, error, message) => {
+    expect(itemErrorMessage(error)).toBe(message);
   });
 });
 

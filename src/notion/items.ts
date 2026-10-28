@@ -1,7 +1,7 @@
 import type { CaptureFormState } from '@/capture/form-validation';
 import type { NotionConfig } from '@/config/notion-config';
-import { notionPost } from './client';
-import { buildCreatePageBody, localDate } from './item-payload';
+import { notionPatch, notionPost } from './client';
+import { buildCreatePageBody, buildUpdatePageBody, localDate } from './item-payload';
 
 interface PageResponse {
   id: string;
@@ -34,4 +34,13 @@ export async function findItemByUrl(config: NotionConfig, url: string): Promise<
     page_size: 1,
   });
   return results[0]?.url ?? null;
+}
+
+/** Enregistre dans Readme center les champs modifiés de l'item `pageId` (US-05, design.md, décision 5). */
+export async function updateItem(
+  config: NotionConfig,
+  pageId: string,
+  body: ReturnType<typeof buildUpdatePageBody>,
+): Promise<void> {
+  await notionPatch<PageResponse>(config.token, `pages/${pageId}`, body);
 }

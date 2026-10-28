@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CaptureFormState } from '@/capture/form-validation';
-import { buildCreatePageBody, localDate } from '@/notion/item-payload';
+import { buildCreatePageBody, buildUpdatePageBody, localDate } from '@/notion/item-payload';
 
 const DATA_SOURCE_ID = 'fedcba98-7654-3210-fedc-ba9876543210';
 
@@ -63,6 +63,80 @@ describe('buildCreatePageBody', () => {
   it('ne renseigne ni Description, ni Type, ni le corps de la page', () => {
     const body = buildCreatePageBody(form, DATA_SOURCE_ID, '2026-10-27');
     expect(body).not.toHaveProperty('children');
+    expect(body.properties).not.toHaveProperty('Description');
+    expect(body.properties).not.toHaveProperty('Type');
+  });
+});
+
+describe('buildUpdatePageBody', () => {
+  const saved: CaptureFormState = {
+    ...form,
+    author: 'C. Martin',
+    authorLinkedin: 'https://www.linkedin.com/in/camille-martin-exemple',
+    themes: ['Management', 'Strategy'],
+  };
+
+  it('met à jour Title quand le titre a changé', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, title: ' TBM 444 — What a workplace can’t promise ' })).toEqual({
+      properties: { Title: { title: [{ text: { content: 'TBM 444 — What a workplace can’t promise' } }] } },
+    });
+  });
+
+  it('met à jour URL quand l’URL a changé', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, url: 'https://exemple.com/blog/un-autre-article' })).toEqual({
+      properties: { URL: { url: 'https://exemple.com/blog/un-autre-article' } },
+    });
+  });
+
+  it('met à jour Source quand l’auteur a changé', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, author: 'Camille Martin' })).toEqual({
+      properties: { Source: { rich_text: [{ text: { content: 'Camille Martin' } }] } },
+    });
+  });
+
+  it('met à jour LinkedIn auteur quand le profil a changé', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, authorLinkedin: 'https://www.linkedin.com/in/camille-martin' })).toEqual({
+      properties: { 'LinkedIn auteur': { url: 'https://www.linkedin.com/in/camille-martin' } },
+    });
+  });
+
+  it('vide LinkedIn auteur avec null quand le profil a été effacé', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, authorLinkedin: '' })).toEqual({
+      properties: { 'LinkedIn auteur': { url: null } },
+    });
+  });
+
+  it('envoie la liste complète des thèmes quand les thèmes ont changé', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, themes: ['Management', 'Design'] })).toEqual({
+      properties: { Theme: { multi_select: [{ name: 'Management' }, { name: 'Design' }] } },
+    });
+  });
+
+  it('met à jour uniquement l’icône quand la langue a changé', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, language: 'fr' })).toEqual({ icon: { type: 'emoji', emoji: '🇫🇷' } });
+  });
+
+  it('regroupe plusieurs champs modifiés', () => {
+    expect(buildUpdatePageBody(saved, { ...saved, author: 'Camille Martin', language: 'es', themes: ['Design'] })).toEqual({
+      icon: { type: 'emoji', emoji: '🇪🇸' },
+      properties: {
+        Source: { rich_text: [{ text: { content: 'Camille Martin' } }] },
+        Theme: { multi_select: [{ name: 'Design' }] },
+      },
+    });
+  });
+
+  it('ne renseigne jamais Date, Description, Type ni le corps de la page', () => {
+    const body = buildUpdatePageBody(saved, {
+      title: 'Un autre titre',
+      url: 'https://exemple.com/blog/un-autre-article',
+      author: 'Camille Martin',
+      authorLinkedin: '',
+      language: 'fr',
+      themes: ['Design'],
+    });
+    expect(body).not.toHaveProperty('children');
+    expect(body.properties).not.toHaveProperty('Date');
     expect(body.properties).not.toHaveProperty('Description');
     expect(body.properties).not.toHaveProperty('Type');
   });

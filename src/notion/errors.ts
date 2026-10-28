@@ -10,6 +10,7 @@ export const MESSAGES = {
   changedDatabase: 'La base Notion a changé',
   rateLimited: 'Notion limite les appels',
   unavailable: 'Notion ne répond pas',
+  itemNotFound: 'Item introuvable dans Notion',
 } as const;
 
 export type ErrorMessage = (typeof MESSAGES)[keyof typeof MESSAGES];
@@ -27,4 +28,13 @@ export function errorMessage(error: unknown): ErrorMessage {
     if (error.status >= 500) return MESSAGES.unavailable;
   }
   return MESSAGES.inaccessibleDatabase;
+}
+
+/**
+ * Message d'un échec portant sur un item existant (US-05, design.md, décision 6).
+ * Notion répond 400 à la modification d'une page mise à la corbeille, et 404 à une page introuvable.
+ */
+export function itemErrorMessage(error: unknown): ErrorMessage {
+  if (error instanceof NotionHttpError && (error.status === 400 || error.status === 404)) return MESSAGES.itemNotFound;
+  return errorMessage(error);
 }

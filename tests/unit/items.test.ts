@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CaptureFormState } from '@/capture/form-validation';
 import type { NotionConfig } from '@/config/notion-config';
-import { errorMessage } from '@/notion/errors';
-import { buildCreatePageBody } from '@/notion/item-payload';
-import { createItem, findItemByUrl } from '@/notion/items';
+import { errorMessage, itemErrorMessage } from '@/notion/errors';
+import { buildCreatePageBody, buildUpdatePageBody } from '@/notion/item-payload';
+import { createItem, findItemByUrl, updateItem } from '@/notion/items';
 
 const DATA_SOURCE_ID = 'fedcba98-7654-3210-fedc-ba9876543210';
 const PAGE_ID = '11111111-2222-3333-4444-555555555555';
@@ -94,5 +94,33 @@ describe('findItemByUrl', () => {
 
     const error = await findItemByUrl(config, form.url).catch((caught: unknown) => caught);
     expect(errorMessage(error)).toBe('Jeton Notion invalide');
+  });
+});
+
+describe('updateItem', () => {
+  const body = buildUpdatePageBody(form, { ...form, author: 'C. Martin', language: 'en' });
+
+  it('envoie la modification de la page', async () => {
+    const fetchMock = stubFetch(() => Response.json({ id: PAGE_ID, url: PAGE_URL }));
+
+    await expect(updateItem(config, PAGE_ID, body)).resolves.toBeUndefined();
+    const [input, init] = fetchMock.mock.calls[0]!;
+    expect(input).toBe(`https://api.notion.com/v1/pages/${PAGE_ID}`);
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('échoue sur une réponse 404 avec le message « Item introuvable dans Notion »', async () => {
+    stubFetch(() => new Response(null, { status: 404 }));
+
+    const error = await updateItem(config, PAGE_ID, body).catch((caught: unknown) => caught);
+    expect(itemErrorMessage(error)).toBe('Item introuvable dans Notion');
+  });
+
+  it('échoue sans réseau avec le message « Connexion impossible »', async () => {
+    stubFetch(() => Promise.reject(new TypeError('NetworkError')));
+
+    const error = await updateItem(config, PAGE_ID, body).catch((caught: unknown) => caught);
+    expect(itemErrorMessage(error)).toBe('Connexion impossible');
   });
 });
