@@ -64,7 +64,7 @@ Pendant la création, le bouton « Ajouter » SHALL afficher « Ajout en cours�
 - **ET** un seul item est créé dans Readme center
 
 ### Requirement: Confirmer la création
-Après la création, le panneau SHALL afficher le message « Item créé dans Readme center », un lien « Ouvrir dans Notion » vers la page de l'item, et SHALL ne plus afficher le bouton « Ajouter ».
+Après la création, le panneau SHALL afficher le message « Item créé dans Readme center », un lien « Ouvrir dans Notion » vers la page de l'item, et SHALL ne plus afficher le bouton « Ajouter ». Le message SHALL être masqué dès qu'un champ diffère des valeurs enregistrées, et le lien SHALL rester affiché.
 
 #### Scenario: Nominal — Item créé
 - **ÉTANT DONNÉ QUE** l'utilisatrice a cliqué sur « Ajouter »
@@ -77,6 +77,12 @@ Après la création, le panneau SHALL afficher le message « Item créé dans Re
 - **ÉTANT DONNÉ QUE** le panneau affiche le message « Item créé dans Readme center »
 - **LORSQUE** l'utilisatrice clique sur « Ouvrir dans Notion »
 - **ALORS** la page de l'item s'ouvre dans un nouvel onglet
+
+#### Scenario: Alternatif — Première modification après la création
+- **ÉTANT DONNÉ QUE** le panneau affiche le message « Item créé dans Readme center »
+- **LORSQUE** l'utilisatrice modifie le titre
+- **ALORS** le message « Item créé dans Readme center » n'est plus affiché
+- **ET** le lien « Ouvrir dans Notion » reste affiché
 
 ### Requirement: Indiquer la cause d'un échec de création
 Si la création échoue, le panneau SHALL afficher le message de la cause la plus probable selon la table d'erreurs du PRD, conserver toutes les valeurs du formulaire et rendre le bouton « Ajouter » à nouveau actif.
