@@ -96,7 +96,7 @@
   --color-text-secondary: var(--color-neutral-600); /* DS docs/foundations/color.md */
   --color-text-tertiary: var(--color-neutral-400); /* DS docs/foundations/color.md */
   --color-text-inverse: var(--color-neutral-100); /* DS docs/foundations/color.md */
-  --color-text-accent: var(--color-primary-500); /* DS docs/foundations/color.md */
+  --color-text-accent: var(--color-primary-700); /* DS docs/foundations/color.md (v1.7) */
   --color-border-subtle: var(--color-neutral-200); /* DS docs/foundations/color.md */
   --color-border-default: var(--color-neutral-300); /* DS docs/foundations/color.md */
   --color-border-accent: var(--color-primary-500); /* DS docs/foundations/color.md */

@@ -4,10 +4,12 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import DsButton from '@/components/DsButton.vue';
 import DsCheckbox from '@/components/DsCheckbox.vue';
 import DsChoiceGroup from '@/components/DsChoiceGroup.vue';
+import DsDisclosure from '@/components/DsDisclosure.vue';
 import DsField from '@/components/DsField.vue';
 import DsInput from '@/components/DsInput.vue';
 import DsLink from '@/components/DsLink.vue';
 import DsMessage from '@/components/DsMessage.vue';
+import ExtractCapture from './ExtractCapture.vue';
 import { changedFields, normalizeForm } from '@/capture/form-diff';
 import { isFormValid, type CaptureFormState, type Language } from '@/capture/form-validation';
 import { readActiveTabPage } from '@/capture/page-snapshot';
@@ -50,6 +52,9 @@ const saveError = ref<string | null>(null);
 
 // Libellé du message de confirmation, qui garde le dernier affiché (US-05, design.md, décision 7).
 const confirmation = ref('Item créé dans Readme center');
+
+// Formulaire déplié ou replié une fois l'item créé (US-06, design.md, décision 10).
+const expanded = ref(true);
 
 // Vrai dès la première saisie dans « Titre », « URL », « Auteur » ou « LinkedIn de l'auteur » :
 // le formulaire cesse alors de suivre l'onglet actif.
@@ -173,6 +178,20 @@ const valid = computed(() => isFormValid(formState.value));
 // Vrai si un champ diffère des dernières valeurs enregistrées (US-05, design.md, décision 3).
 const dirty = computed(() => savedValues.value !== null && changedFields(savedValues.value, formState.value).length > 0);
 
+// Disclosure qui enveloppe le formulaire une fois l'item créé, bloqué tant qu'un champ a changé
+// (US-06, design.md, décision 10).
+const disclosureProps = computed(() =>
+  createdItemUrl.value === null
+    ? {}
+    : {
+        label: savedValues.value?.title ?? '',
+        expanded: expanded.value,
+        'onUpdate:expanded': (value: boolean) => (expanded.value = value),
+        disabled: dirty.value,
+        disabledReason: 'Enregistrez vos modifications',
+      },
+);
+
 /** Crée l'item ; en cas d'échec, le formulaire est conservé et « Ajouter » redevient actif. */
 async function addItem() {
   if (!valid.value || status.value !== 'editing') return;
@@ -185,6 +204,7 @@ async function addItem() {
     createdItemUrl.value = item.url;
     savedValues.value = sent;
     duplicateUrl.value = null;
+    expanded.value = false;
     status.value = 'created';
   } catch (error) {
     creationError.value = errorMessage(error);
@@ -202,6 +222,7 @@ async function saveChanges() {
     await updateItem(props.config, createdItemId.value, buildUpdatePageBody(savedValues.value, sent));
     savedValues.value = sent;
     confirmation.value = 'Modifications enregistrées dans Readme center';
+    expanded.value = false;
   } catch (error) {
     saveError.value = itemErrorMessage(error);
   }
@@ -210,64 +231,67 @@ async function saveChanges() {
 </script>
 
 <template>
-  <form class="flex flex-col gap-6" @submit.prevent>
-    <DsField label="Titre" for="title">
-      <DsInput id="title" v-model="title" @input="edited = true" />
-    </DsField>
-    <DsField label="URL" for="url">
-      <DsInput id="url" v-model="url" :invalid="urlInvalid" @input="edited = true" @blur="onUrlBlur" />
-      <template v-if="duplicateUrl">
-        <DsMessage variant="warning">Cette URL existe déjà dans Readme center</DsMessage>
-        <DsLink :href="duplicateUrl" @click.prevent="openPage(duplicateUrl)">Ouvrir l'item existant</DsLink>
-      </template>
-    </DsField>
-    <DsField label="Auteur" for="author">
-      <DsInput id="author" v-model="author" @input="edited = true" />
-    </DsField>
-    <DsField label="LinkedIn de l'auteur" for="author-linkedin">
-      <DsInput
-        id="author-linkedin"
-        v-model="authorLinkedin"
-        :invalid="authorLinkedinInvalid"
-        @input="edited = true"
-        @blur="onAuthorLinkedinBlur"
-      />
-    </DsField>
-    <fieldset class="flex flex-col gap-2">
-      <legend class="mb-2 text-caption text-text-secondary">Langue</legend>
-      <DsChoiceGroup v-model="language" label="Langue" :options="LANGUAGES" />
-    </fieldset>
-    <fieldset class="flex flex-col gap-2">
-      <legend class="mb-2 text-caption text-text-secondary">Thèmes</legend>
-      <DsMessage v-if="themesError" variant="error">{{ themesError }}</DsMessage>
-      <DsCheckbox
-        v-for="theme in themeOptions"
-        v-else
-        :key="theme"
-        :model-value="themes.includes(theme)"
-        :label="theme"
-        @update:model-value="toggleTheme(theme, $event)"
-      />
-    </fieldset>
-    <div v-if="createdItemUrl" class="flex flex-col gap-2">
-      <DsMessage v-if="status === 'created' && !dirty" variant="success">{{ confirmation }}</DsMessage>
+  <component :is="createdItemUrl ? DsDisclosure : 'div'" v-bind="disclosureProps">
+    <template v-if="createdItemUrl" #accessory>
       <DsLink :href="createdItemUrl" @click.prevent="openPage(createdItemUrl)">Ouvrir dans Notion</DsLink>
-    </div>
-    <div v-if="!createdItemUrl" class="flex flex-col gap-2">
-      <DsMessage v-if="creationError" variant="error">{{ creationError }}</DsMessage>
-      <div>
-        <DsButton :disabled="!valid || status === 'creating'" @click="addItem">
-          {{ status === 'creating' ? 'Ajout en cours…' : 'Ajouter' }}
-        </DsButton>
+    </template>
+    <form class="flex flex-col gap-6" @submit.prevent>
+      <DsField label="Titre" for="title">
+        <DsInput id="title" v-model="title" @input="edited = true" />
+      </DsField>
+      <DsField label="URL" for="url">
+        <DsInput id="url" v-model="url" :invalid="urlInvalid" @input="edited = true" @blur="onUrlBlur" />
+        <template v-if="duplicateUrl">
+          <DsMessage variant="warning">Cette URL existe déjà dans Readme center</DsMessage>
+          <DsLink :href="duplicateUrl" @click.prevent="openPage(duplicateUrl)">Ouvrir l'item existant</DsLink>
+        </template>
+      </DsField>
+      <DsField label="Auteur" for="author">
+        <DsInput id="author" v-model="author" @input="edited = true" />
+      </DsField>
+      <DsField label="LinkedIn de l'auteur" for="author-linkedin">
+        <DsInput
+          id="author-linkedin"
+          v-model="authorLinkedin"
+          :invalid="authorLinkedinInvalid"
+          @input="edited = true"
+          @blur="onAuthorLinkedinBlur"
+        />
+      </DsField>
+      <fieldset class="flex flex-col gap-2">
+        <legend class="mb-2 text-caption text-text-secondary">Langue</legend>
+        <DsChoiceGroup v-model="language" label="Langue" :options="LANGUAGES" />
+      </fieldset>
+      <fieldset class="flex flex-col gap-2">
+        <legend class="mb-2 text-caption text-text-secondary">Thèmes</legend>
+        <DsMessage v-if="themesError" variant="error">{{ themesError }}</DsMessage>
+        <DsCheckbox
+          v-for="theme in themeOptions"
+          v-else
+          :key="theme"
+          :model-value="themes.includes(theme)"
+          :label="theme"
+          @update:model-value="toggleTheme(theme, $event)"
+        />
+      </fieldset>
+      <div v-if="!createdItemUrl" class="flex flex-col gap-2">
+        <DsMessage v-if="creationError" variant="error">{{ creationError }}</DsMessage>
+        <div>
+          <DsButton :disabled="!valid || status === 'creating'" @click="addItem">
+            {{ status === 'creating' ? 'Ajout en cours…' : 'Ajouter' }}
+          </DsButton>
+        </div>
       </div>
-    </div>
-    <div v-else-if="status === 'saving' || dirty" class="flex flex-col gap-2">
-      <DsMessage v-if="saveError" variant="error">{{ saveError }}</DsMessage>
-      <div>
-        <DsButton :disabled="!valid || status === 'saving'" @click="saveChanges">
-          {{ status === 'saving' ? 'Enregistrement en cours…' : 'Enregistrer les modifications' }}
-        </DsButton>
+      <div v-else-if="status === 'saving' || dirty" class="flex flex-col gap-2">
+        <DsMessage v-if="saveError" variant="error">{{ saveError }}</DsMessage>
+        <div>
+          <DsButton :disabled="!valid || status === 'saving'" @click="saveChanges">
+            {{ status === 'saving' ? 'Enregistrement en cours…' : 'Enregistrer les modifications' }}
+          </DsButton>
+        </div>
       </div>
-    </div>
-  </form>
+    </form>
+  </component>
+  <DsMessage v-if="createdItemUrl && status === 'created' && !dirty" variant="success">{{ confirmation }}</DsMessage>
+  <ExtractCapture v-if="createdItemId" :config="config" :page-id="createdItemId" />
 </template>
