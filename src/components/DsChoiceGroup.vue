@@ -1,8 +1,8 @@
 <script setup lang="ts" generic="T extends string">
-// Atome Choice Group du DS (Figma, page Components, nœud 646:111) : rangée de Buttons secondary sm,
+// Atome Choice Group du DS v1.13 (Figma, page Components, nœud 646:111) : rangée de Buttons secondary sm de 44 px,
 // l'option choisie reçoit une bordure 2 px border/accent, avec le comportement clavier d'un groupe de boutons radio
 // (une seule tabulation, flèches pour changer). Comme dans Figma, la bordure de 2 px ne change pas la taille du bouton :
-// le padding perd 1 px de chaque côté.
+// le padding horizontal perd 1 px de chaque côté.
 import { ref } from 'vue';
 import DsButton from './DsButton.vue';
 
@@ -44,7 +44,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
       ref="buttons"
       size="sm"
       variant="secondary"
-      :class="option.value === model ? 'border-2! border-border-accent! px-[13px]! py-[7px]!' : ''"
+      :class="option.value === model ? 'border-2! border-border-accent! px-[15px]!' : ''"
       role="radio"
       :aria-checked="option.value === model"
       :tabindex="tabIndex(index)"

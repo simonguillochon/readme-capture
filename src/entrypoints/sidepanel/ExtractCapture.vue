@@ -274,7 +274,7 @@ async function removeExtract(extract: Extract) {
     <div class="flex flex-col gap-2">
       <DsMessage v-if="error" variant="error">{{ error }}</DsMessage>
       <div>
-        <DsButton :disabled="!canAdd" @click="addExtract">{{ adding ? 'Ajout en cours…' : "Ajouter l'extrait" }}</DsButton>
+        <DsButton size="sm" :disabled="!canAdd" @click="addExtract">{{ adding ? 'Ajout en cours…' : "Ajouter l'extrait" }}</DsButton>
       </div>
     </div>
     <div v-if="extracts.length > 0" class="flex flex-col gap-4">

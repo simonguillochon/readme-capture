@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Atome Disclosure du DS v1.8 (Figma, page Components, nœud 660:153) : en-tête toujours visible, corps révélé déplié.
+// Atome Disclosure du DS v1.13 (Figma, page Components, nœud 660:153) : en-tête de 44 px toujours visible, padding horizontal
+// 16 px, corps révélé déplié.
 // Bloqué, le déclencheur prend `aria-disabled` et non `disabled`, pour rester atteignable au clavier.
 import { nextTick, ref, useId, watch } from 'vue';
 import DsIcon from './DsIcon.vue';
@@ -31,11 +32,11 @@ watch(expanded, async (value, previous) => {
 
 <template>
   <div class="w-full border border-border-subtle">
-    <div class="flex min-h-[44px] items-center gap-2 px-4 py-3" :class="{ 'hover:bg-surface-secondary': !disabled }">
+    <div class="flex min-h-[44px] items-center gap-2 px-4" :class="{ 'hover:bg-surface-secondary': !disabled }">
       <button
         ref="trigger"
         type="button"
-        class="flex min-w-[0px] flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        class="flex min-w-[0px] flex-1 items-center gap-2 self-stretch text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         :class="{ 'opacity-60': disabled }"
         :aria-expanded="expanded"
         :aria-controls="bodyId"

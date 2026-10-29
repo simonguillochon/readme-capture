@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Atome Password Input du DS (Figma, page Components, nœud 645:82) : Input suivi d'un Icon Button ghost md.
+// Atome Password Input du DS v1.13 (Figma, page Components, nœud 645:82) : Input de 44 px suivi d'un Icon Button ghost md
+// de 44 × 44 px, espacés de 8 px.
 import { ref } from 'vue';
 import DsInput from './DsInput.vue';
 import DsIconButton from './DsIconButton.vue';

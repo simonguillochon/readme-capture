@@ -96,12 +96,13 @@
   --color-text-secondary: var(--color-neutral-600); /* DS docs/foundations/color.md */
   --color-text-tertiary: var(--color-neutral-400); /* DS docs/foundations/color.md */
   --color-text-inverse: var(--color-neutral-100); /* DS docs/foundations/color.md */
+  --color-text-on-accent: var(--color-neutral-950); /* DS docs/foundations/color.md (v1.11) */
   --color-text-accent: var(--color-primary-700); /* DS docs/foundations/color.md (v1.7) */
   --color-border-subtle: var(--color-neutral-200); /* DS docs/foundations/color.md */
   --color-border-default: var(--color-neutral-300); /* DS docs/foundations/color.md */
   --color-border-accent: var(--color-primary-500); /* DS docs/foundations/color.md */
   --color-accent: var(--color-primary-500); /* DS docs/foundations/color.md */
-  --color-accent-hover: var(--color-primary-600); /* DS docs/foundations/color.md */
+  --color-accent-hover: var(--color-primary-400); /* DS docs/foundations/color.md (v1.11) */
   --color-accent-subtle: var(--color-primary-50); /* DS docs/foundations/color.md */
   --color-feedback-success: var(--color-success); /* DS docs/foundations/color.md */
   --color-feedback-warning: var(--color-warning-light); /* DS docs/foundations/color.md */
@@ -207,6 +208,7 @@
     --color-text-secondary: var(--color-neutral-300); /* DS docs/foundations/color.md */
     --color-text-tertiary: var(--color-neutral-400); /* DS docs/foundations/color.md */
     --color-text-inverse: var(--color-neutral-950); /* DS docs/foundations/color.md */
+    --color-text-on-accent: var(--color-neutral-950); /* DS docs/foundations/color.md (v1.11) */
     --color-text-accent: var(--color-primary-400); /* DS docs/foundations/color.md */
     --color-border-subtle: var(--color-neutral-800); /* DS docs/foundations/color.md */
     --color-border-default: var(--color-neutral-700); /* DS docs/foundations/color.md */

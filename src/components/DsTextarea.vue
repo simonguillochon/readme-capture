@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Atome Textarea du DS (Figma, page Components, nœud 157:23) : 96px de haut par défaut (3 lignes), redimensionnable.
+// Atome Textarea du DS v1.13 (Figma, page Components, nœud 157:23) : padding 16 px / 12 px, hauteur minimale de 3 lignes,
+// redimensionnable verticalement seulement.
 const model = defineModel<string>({ default: '' });
 
 withDefaults(
@@ -20,7 +21,8 @@ withDefaults(
     :placeholder="placeholder"
     :disabled="disabled"
     :aria-invalid="invalid || undefined"
-    class="block h-[96px] w-full resize-y rounded-sm border bg-surface-elevated px-[14px] py-[12px] font-sans text-[16px] leading-[1.6] text-text-primary outline-none placeholder:text-text-tertiary focus:border-border-accent focus:shadow-[inset_0_0_0_1px_var(--color-border-accent)] disabled:border-border-subtle disabled:bg-surface-secondary disabled:opacity-60"
+    rows="3"
+    class="block min-h-[calc(3lh+2*var(--spacing-3)+2px)] w-full resize-y rounded-sm border bg-surface-elevated px-4 py-3 font-sans text-[16px] leading-[1.6] text-text-primary outline-none placeholder:text-text-secondary focus:border-border-accent focus:shadow-[inset_0_0_0_1px_var(--color-border-accent)] disabled:border-border-subtle disabled:bg-surface-secondary disabled:opacity-60"
     :class="invalid ? 'border-feedback-error' : 'border-border-default'"
   />
 </template>

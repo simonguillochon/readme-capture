@@ -58,7 +58,7 @@ async function save() {
         <DsInput id="database-url" v-model="databaseUrl" type="text" />
       </DsField>
       <div>
-        <DsButton type="submit" :disabled="!canSave">Enregistrer</DsButton>
+        <DsButton type="submit" size="sm" :disabled="!canSave">Enregistrer</DsButton>
       </div>
     </form>
     <DsMessage v-if="message" :variant="message.variant">{{ message.text }}</DsMessage>

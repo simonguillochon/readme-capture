@@ -59,3 +59,12 @@ export function localDate(now: Date): string {
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
 }
+
+/**
+ * Corps de `PATCH /v1/pages/{id}` qui remplace la Description de l'item (US-08, design.md, décision 5).
+ * Un texte vide après retrait des espaces de début et de fin efface la description.
+ */
+export function buildDescriptionBody(text: string) {
+  const content = text.trim();
+  return { properties: { Description: { rich_text: content === '' ? [] : [{ text: { content } }] } } };
+}

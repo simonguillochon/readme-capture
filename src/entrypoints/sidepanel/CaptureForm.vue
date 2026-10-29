@@ -9,6 +9,7 @@ import DsField from '@/components/DsField.vue';
 import DsInput from '@/components/DsInput.vue';
 import DsLink from '@/components/DsLink.vue';
 import DsMessage from '@/components/DsMessage.vue';
+import DescriptionEditor from './DescriptionEditor.vue';
 import ExtractCapture from './ExtractCapture.vue';
 import { changedFields, normalizeForm } from '@/capture/form-diff';
 import { isFormValid, type CaptureFormState, type Language } from '@/capture/form-validation';
@@ -277,7 +278,7 @@ async function saveChanges() {
       <div v-if="!createdItemUrl" class="flex flex-col gap-2">
         <DsMessage v-if="creationError" variant="error">{{ creationError }}</DsMessage>
         <div>
-          <DsButton :disabled="!valid || status === 'creating'" @click="addItem">
+          <DsButton size="sm" :disabled="!valid || status === 'creating'" @click="addItem">
             {{ status === 'creating' ? 'Ajout en cours…' : 'Ajouter' }}
           </DsButton>
         </div>
@@ -285,7 +286,7 @@ async function saveChanges() {
       <div v-else-if="status === 'saving' || dirty" class="flex flex-col gap-2">
         <DsMessage v-if="saveError" variant="error">{{ saveError }}</DsMessage>
         <div>
-          <DsButton :disabled="!valid || status === 'saving'" @click="saveChanges">
+          <DsButton size="sm" :disabled="!valid || status === 'saving'" @click="saveChanges">
             {{ status === 'saving' ? 'Enregistrement en cours…' : 'Enregistrer les modifications' }}
           </DsButton>
         </div>
@@ -293,5 +294,6 @@ async function saveChanges() {
     </form>
   </component>
   <DsMessage v-if="createdItemUrl && status === 'created' && !dirty" variant="success">{{ confirmation }}</DsMessage>
+  <DescriptionEditor v-if="createdItemId" :config="config" :page-id="createdItemId" />
   <ExtractCapture v-if="createdItemId" :config="config" :page-id="createdItemId" />
 </template>

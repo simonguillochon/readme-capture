@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CaptureFormState } from '@/capture/form-validation';
-import { buildCreatePageBody, buildUpdatePageBody, localDate } from '@/notion/item-payload';
+import { buildCreatePageBody, buildDescriptionBody, buildUpdatePageBody, localDate } from '@/notion/item-payload';
 
 const DATA_SOURCE_ID = 'fedcba98-7654-3210-fedc-ba9876543210';
 
@@ -149,5 +149,35 @@ describe('localDate', () => {
 
   it('renvoie la date du jour local à 23 h 30', () => {
     expect(localDate(new Date(2026, 9, 27, 23, 30))).toBe('2026-10-27');
+  });
+});
+
+describe('buildDescriptionBody', () => {
+  it('écrit le texte dans la Description', () => {
+    expect(buildDescriptionBody('Une culture se lit dans les arbitrages.')).toEqual({
+      properties: { Description: { rich_text: [{ text: { content: 'Une culture se lit dans les arbitrages.' } }] } },
+    });
+  });
+
+  it('retire les espaces de début et de fin', () => {
+    expect(buildDescriptionBody('  Version corrigée. \n ').properties.Description.rich_text).toEqual([
+      { text: { content: 'Version corrigée.' } },
+    ]);
+  });
+
+  it('conserve les sauts de ligne', () => {
+    expect(buildDescriptionBody('Première ligne.\nSeconde ligne.').properties.Description.rich_text).toEqual([
+      { text: { content: 'Première ligne.\nSeconde ligne.' } },
+    ]);
+  });
+
+  it('efface la description pour un texte vide', () => {
+    expect(buildDescriptionBody('   ')).toEqual({ properties: { Description: { rich_text: [] } } });
+  });
+
+  it('ne contient aucune autre propriété', () => {
+    const body = buildDescriptionBody('Un texte.');
+    expect(Object.keys(body)).toEqual(['properties']);
+    expect(Object.keys(body.properties)).toEqual(['Description']);
   });
 });

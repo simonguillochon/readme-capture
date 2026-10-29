@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Atome Checkbox du DS (Figma, page Components, nœud 646:86) : case de 20 px dessinée sur un vrai input checkbox,
-// relié à son libellé pour garder Tab et Espace, avec l'icône check affichée par-dessus quand la case est cochée.
+// Atome Checkbox du DS v1.13 (Figma, page Components, nœud 646:86) : case de 20 px dans une zone de 44 px de haut couvrant
+// la case et le libellé, dessinée sur un vrai input checkbox,
+// relié à son libellé pour garder Tab et Espace, avec l'icône check de 16 px sur text/on-accent affichée par-dessus quand la case est cochée.
 import DsIcon from './DsIcon.vue';
 
 const model = defineModel<boolean>({ default: false });
@@ -9,7 +10,7 @@ withDefaults(defineProps<{ label: string; disabled?: boolean }>(), { disabled: f
 </script>
 
 <template>
-  <label class="inline-flex items-center gap-2 text-body text-text-primary has-disabled:text-text-tertiary">
+  <label class="inline-flex min-h-[44px] items-center gap-2 text-body text-text-primary has-disabled:text-text-tertiary">
     <span class="grid size-[20px] shrink-0 place-items-center">
       <input
         v-model="model"
@@ -19,7 +20,7 @@ withDefaults(defineProps<{ label: string; disabled?: boolean }>(), { disabled: f
       />
       <DsIcon
         name="check"
-        class="pointer-events-none col-start-1 row-start-1 invisible size-4! text-text-inverse peer-checked:visible"
+        class="pointer-events-none col-start-1 row-start-1 invisible size-4! text-text-on-accent peer-checked:visible"
       />
     </span>
     {{ label }}
