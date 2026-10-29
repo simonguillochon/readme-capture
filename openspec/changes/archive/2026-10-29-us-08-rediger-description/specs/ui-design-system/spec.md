@@ -20,6 +20,19 @@ Chaque élément d'interface du panneau et de la page d'options SHALL correspond
 - **LORSQUE** l'utilisatrice regarde la zone « Description »
 - **ALORS** le compteur de caractères s'affiche sous le champ en Caption sur `text/secondary`, aligné à droite
 
+### Requirement: Afficher les cases à cocher selon l'atome Checkbox
+Chaque case à cocher SHALL être une case de 20 px au rayon `sm`, sur fond `surface/elevated` avec une bordure `border/default` quand elle n'est pas cochée, et sur fond `accent` avec l'icône `check` en `text/on-accent` quand elle est cochée.
+
+#### Scenario: Nominal — Cocher un thème
+- **ÉTANT DONNÉ QUE** le thème « Management » n'est pas coché
+- **LORSQUE** l'utilisatrice coche « Management »
+- **ALORS** la case de « Management » passe sur fond `accent` avec l'icône `check` en `text/on-accent`
+
+#### Scenario: Alternatif — Survol d'une case non cochée
+- **ÉTANT DONNÉ QUE** le thème « Design » n'est pas coché
+- **LORSQUE** l'utilisatrice survole la case de « Design »
+- **ALORS** la bordure de la case passe en `border/accent`
+
 ## ADDED Requirements
 
 ### Requirement: Offrir des cibles de 44 px
