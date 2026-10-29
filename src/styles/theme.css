@@ -4,7 +4,7 @@
  * Le mode sombre suit prefers-color-scheme (design.md, décision 7).
  */
 
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 
 /* Polices du DS, embarquées dans public/fonts/ avec leur licence SIL OFL 1.1 (design.md, décision 7) */
 @font-face {

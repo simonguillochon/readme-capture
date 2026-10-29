@@ -34,6 +34,17 @@ Le fichier `.env` est ignoré par git. Il ne doit jamais être versionné.
 
 L'extension reste chargée jusqu'à la fermeture de Zen.
 
+## Installation signée
+
+La version signée reste installée après un redémarrage de Zen. Elle est signée par Mozilla en distribution non listée : elle n'apparaît pas dans le catalogue d'addons.mozilla.org.
+
+1. Construire les archives : `npm run zip`. Le dossier `.output/` contient `readme-capture-<version>-firefox.zip` (l'extension) et `readme-capture-<version>-sources.zip` (ses sources).
+2. Sur addons.mozilla.org, dans le Developer Hub, cliquer sur « Submit a New Add-on », choisir « On your own », puis envoyer `readme-capture-<version>-firefox.zip`. Quand le site demande les sources, envoyer `readme-capture-<version>-sources.zip`, avec la consigne de reconstruction : `npm ci`, puis `npm run zip`.
+3. Une fois l'extension signée, télécharger le fichier `.xpi` signé.
+4. Dans Zen, ouvrir `about:addons`, cliquer sur la roue dentée, puis sur « Installer un module depuis un fichier… », et sélectionner le fichier `.xpi`.
+
+Mise à jour : augmenter la version dans `package.json`, puis reprendre les étapes 1 à 4 en choisissant « Upload New Version » sur la page de l'extension dans le Developer Hub. Chaque nouvelle signature exige une version supérieure à la précédente. La configuration de la connexion à Notion est conservée.
+
 ## Permissions
 
 L'extension demande :
@@ -43,6 +54,8 @@ L'extension demande :
 - L'accès à tous les sites (`<all_urls>`) : nécessaire pour lire la page de l'onglet actif, quel que soit le site, et pour appeler l'API Notion (`https://api.notion.com`).
 
 La page n'est lue que lorsque le panneau est ouvert, et uniquement celle de l'onglet actif de sa fenêtre, en lecture seule. L'extension ne déclare aucun script de contenu : rien n'est ajouté aux pages quand le panneau est fermé.
+
+Le manifeste déclare que l'extension ne collecte aucune donnée (`data_collection_permissions` : `none`) : la configuration reste dans le stockage local de l'extension, et les contenus capturés ne sont envoyés qu'à la base Notion de l'utilisatrice, à sa demande.
 
 ## Scripts npm
 
