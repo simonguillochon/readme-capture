@@ -84,7 +84,7 @@ interface CaptureSession {
 - Les surlignages de la page lue sont retirés en déconnectant les ports, comme à la fermeture du panneau.
 
 ### 8. Interface
-- En bas du panneau, sous la zone « Description », un Divider `subtle`, puis `DsButton` `secondary` `md` « Terminer ».
+- En bas du panneau, sous la zone des extraits, un Divider `subtle`, puis `DsButton` `secondary` `md` « Terminer ».
 - Confirmation : à la place du bouton, `DsMessage` `warning` « Des modifications ne sont pas enregistrées dans Notion », puis `DsButton` `primary` `sm` « Terminer quand même » et `DsButton` `secondary` `sm` « Annuler », espacés de 8 px.
 
 ### 9. Tests
