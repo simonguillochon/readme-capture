@@ -7,11 +7,19 @@ export interface Section {
   level: HeadingLevel;
 }
 
+/** Surlignage d'un extrait : onglet où il a été surligné et clé locale (US-07, design.md, décision 5). */
+export interface ExtractHighlight {
+  tabId: number;
+  key: string;
+}
+
 /** Extrait ajouté à l'item ; `blockId` est l'identifiant de sa citation dans Notion. */
 export interface Extract {
   blockId: string;
   sectionId: string | null;
   text: string;
+  /** `null` quand l'extrait n'a pas été surligné. */
+  highlight: ExtractHighlight | null;
 }
 
 /** Sections dans l'ordre de création et extraits dans l'ordre de la page (US-06, design.md, décision 3). */
@@ -63,7 +71,7 @@ export function placeExtract(state: ExtractState, target: ExtractTarget, text: s
       position: { type: 'end' },
       apply: ([headingId, quoteId]) => {
         const sections = [...state.sections, { id: headingId!, title, level: resolved.level }];
-        return { sections, extracts: [...state.extracts, { blockId: quoteId!, sectionId: headingId!, text }] };
+        return { sections, extracts: [...state.extracts, { blockId: quoteId!, sectionId: headingId!, text, highlight: null }] };
       },
     };
   }
@@ -80,7 +88,92 @@ export function placeExtract(state: ExtractState, target: ExtractTarget, text: s
     position,
     apply: ([quoteId]) => ({
       sections: state.sections,
-      extracts: sortByPage([...state.extracts, { blockId: quoteId!, sectionId, text }], state.sections),
+      extracts: sortByPage([...state.extracts, { blockId: quoteId!, sectionId, text, highlight: null }], state.sections),
     }),
+  };
+}
+
+/** Appel Notion d'une modification, d'un déplacement ou d'une suppression (US-07, design.md, décision 3). */
+export type ExtractOperation =
+  | { kind: 'update'; blockId: string; text: string }
+  | { kind: 'append'; blocks: ExtractBlock[]; position: BlockPosition }
+  | { kind: 'delete-quote'; blockId: string }
+  | { kind: 'delete-section'; sectionId: string };
+
+export interface ExtractChange {
+  /** Opérations à envoyer une par une, dans l'ordre. */
+  operations: ExtractOperation[];
+  /**
+   * Nouvel état une fois les `completed` premières opérations réussies, avec l'identifiant de la citation créée
+   * par un déplacement (US-07, design.md, décision 4).
+   */
+  apply(completed: number, newBlockId?: string): ExtractState;
+}
+
+/** Retire la section si plus aucun extrait n'y est rangé. */
+function withoutEmptySection(state: ExtractState, sectionId: string | null): ExtractState {
+  if (sectionId === null || state.extracts.some((extract) => extract.sectionId === sectionId)) return state;
+  return { ...state, sections: state.sections.filter((section) => section.id !== sectionId) };
+}
+
+/** Suppression du titre d'une section, si elle est vide dans `state`. */
+function emptySectionOperations(state: ExtractState, sectionId: string | null): ExtractOperation[] {
+  return withoutEmptySection(state, sectionId) === state ? [] : [{ kind: 'delete-section', sectionId: sectionId! }];
+}
+
+/**
+ * Opérations et nouvel état d'un extrait modifié (US-07, design.md, décision 3). Dans la même section, la citation est
+ * mise à jour ; dans une autre section, elle est écrite à l'emplacement de `placeExtract`, puis l'ancienne est supprimée,
+ * ainsi que le titre de l'ancienne section si elle est vide.
+ */
+export function editExtract(state: ExtractState, blockId: string, text: string, sectionId: string | null): ExtractChange {
+  const extract = state.extracts.find((candidate) => candidate.blockId === blockId)!;
+
+  if (extract.sectionId === sectionId) {
+    return {
+      operations: [{ kind: 'update', blockId, text }],
+      apply: (completed) =>
+        completed === 0
+          ? state
+          : { ...state, extracts: state.extracts.map((candidate) => (candidate === extract ? { ...extract, text } : candidate)) },
+    };
+  }
+
+  const others: ExtractState = { ...state, extracts: state.extracts.filter((candidate) => candidate !== extract) };
+  const target: ExtractTarget = sectionId === null ? { kind: 'none' } : { kind: 'section', id: sectionId };
+  const { blocks, position } = placeExtract(others, target, text);
+  const operations: ExtractOperation[] = [
+    { kind: 'append', blocks, position },
+    { kind: 'delete-quote', blockId },
+    ...emptySectionOperations(others, extract.sectionId),
+  ];
+
+  return {
+    operations,
+    apply: (completed, newBlockId) => {
+      if (completed === 0) return state;
+      const moved: Extract = { ...extract, blockId: newBlockId!, sectionId, text };
+      const kept = completed === 1 ? state.extracts : others.extracts;
+      const next: ExtractState = { ...state, extracts: sortByPage([...kept, moved], state.sections) };
+      return completed === operations.length ? withoutEmptySection(next, extract.sectionId) : next;
+    },
+  };
+}
+
+/**
+ * Opérations et nouvel état d'un extrait supprimé : suppression de sa citation, puis du titre de sa section si elle est
+ * vide (US-07, design.md, décision 3).
+ */
+export function deleteExtract(state: ExtractState, blockId: string): ExtractChange {
+  const extract = state.extracts.find((candidate) => candidate.blockId === blockId)!;
+  const others: ExtractState = { ...state, extracts: state.extracts.filter((candidate) => candidate !== extract) };
+  const operations: ExtractOperation[] = [{ kind: 'delete-quote', blockId }, ...emptySectionOperations(others, extract.sectionId)];
+
+  return {
+    operations,
+    apply: (completed) => {
+      if (completed === 0) return state;
+      return completed === operations.length ? withoutEmptySection(others, extract.sectionId) : others;
+    },
   };
 }

@@ -1,4 +1,5 @@
 import type { Browser } from 'wxt/browser';
+import type { ExtractHighlight } from './extract-placement';
 
 export const SELECTION_PORT = 'readme-capture-selection';
 
@@ -11,8 +12,12 @@ export interface SelectionMessage {
   nearestHeading: string | null;
 }
 
-/** Commande postée par le panneau à l'écoute d'un onglet (US-06, design.md, décision 9). */
-type WatcherCommand = { type: 'highlight'; text: string } | { type: 'pause' } | { type: 'resume' };
+/** Commande postée par le panneau à l'écoute d'un onglet (US-06, design.md, décision 9 ; US-07, décision 5). */
+type WatcherCommand =
+  | { type: 'highlight'; text: string; key: string }
+  | { type: 'unhighlight'; key: string }
+  | { type: 'pause' }
+  | { type: 'resume' };
 
 /**
  * Exécutée dans l'onglet actif par `scripting.executeScript` : autonome, sans import (US-06, design.md, décisions 2 et 9).
@@ -41,6 +46,8 @@ export function installSelectionWatcher(): void {
   // Plage et texte de la dernière sélection postée, pour surligner l'extrait une fois ajouté.
   let lastRange: Range | null = null;
   let lastText: string | null = null;
+  // Plage surlignée de chaque extrait, par clé, pour pouvoir en retirer une.
+  const ranges = new Map<string, Range>();
 
   const nearestHeading = (selection: Selection): string | null => {
     if (selection.rangeCount === 0) return null;
@@ -75,14 +82,23 @@ export function installSelectionWatcher(): void {
     timer = undefined;
   };
 
-  const highlight = (text: string) => {
+  const highlight = (text: string, extractKey: string) => {
     if (lastRange === null || lastText !== text) return;
     let extracts = CSS.highlights.get(highlightName);
     if (!extracts) {
       extracts = new Highlight();
       CSS.highlights.set(highlightName, extracts);
     }
-    extracts.add(lastRange.cloneRange());
+    const range = lastRange.cloneRange();
+    ranges.set(extractKey, range);
+    extracts.add(range);
+  };
+
+  const unhighlight = (extractKey: string) => {
+    const range = ranges.get(extractKey);
+    if (!range) return;
+    ranges.delete(extractKey);
+    CSS.highlights.get(highlightName)?.delete(range);
   };
 
   const stop = () => {
@@ -100,7 +116,8 @@ export function installSelectionWatcher(): void {
   registry[key] = handle;
   port.onDisconnect.addListener(stop);
   port.onMessage.addListener((command) => {
-    if (command.type === 'highlight') highlight(command.text);
+    if (command.type === 'highlight') highlight(command.text, command.key);
+    if (command.type === 'unhighlight') unhighlight(command.key);
     if (command.type === 'pause') pause();
     if (command.type === 'resume') {
       listen();
@@ -112,8 +129,13 @@ export function installSelectionWatcher(): void {
 }
 
 export interface SelectionWatch {
-  /** Surligne dans l'onglet actif l'extrait qui vient d'être ajouté (US-06, design.md, décision 9). */
-  highlight(text: string): void;
+  /**
+   * Surligne dans l'onglet actif l'extrait qui vient d'être ajouté et renvoie son onglet et sa clé, ou `null` sans
+   * écoute dans l'onglet actif (US-06, design.md, décision 9 ; US-07, décision 5).
+   */
+  highlight(text: string): ExtractHighlight | null;
+  /** Retire le surlignage d'un extrait, si l'écoute de son onglet est encore connectée (US-07, design.md, décision 5). */
+  unhighlight(highlight: ExtractHighlight): void;
   /** Arrête l'écoute et déconnecte tous les onglets. */
   stop(): void;
 }
@@ -202,9 +224,14 @@ export async function watchActiveTabSelection(
 
   return {
     highlight(text) {
-      if (activeTabId === undefined || !ports.has(activeTabId)) return;
-      post(activeTabId, { type: 'highlight', text });
+      if (activeTabId === undefined || !ports.has(activeTabId)) return null;
+      const key = crypto.randomUUID();
+      post(activeTabId, { type: 'highlight', text, key });
       highlighted.add(activeTabId);
+      return { tabId: activeTabId, key };
+    },
+    unhighlight({ tabId, key }) {
+      post(tabId, { type: 'unhighlight', key });
     },
     stop() {
       browser.runtime.onConnect.removeListener(onConnect);

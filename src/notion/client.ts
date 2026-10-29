@@ -44,7 +44,12 @@ export function notionPatch<T>(token: string, path: string, body: unknown): Prom
   return notionSend<T>('PATCH', token, path, body);
 }
 
-async function notionSend<T>(method: 'POST' | 'PATCH', token: string, path: string, body: unknown): Promise<T> {
+/** Appel DELETE à l'API Notion. */
+export function notionDelete<T>(token: string, path: string): Promise<T> {
+  return notionSend<T>('DELETE', token, path, undefined);
+}
+
+async function notionSend<T>(method: 'POST' | 'PATCH' | 'DELETE', token: string, path: string, body: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${NOTION_API_URL}/${path}`, {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTION_VERSION, NotionHttpError, NotionNetworkError, notionPatch, notionPost } from '@/notion/client';
+import { NOTION_VERSION, NotionHttpError, NotionNetworkError, notionDelete, notionPatch, notionPost } from '@/notion/client';
 
 describe.each([
   ['notionPost', notionPost, 'POST'],
@@ -36,5 +36,40 @@ describe.each([
 
     await expect(send('ntn_exemple123', 'pages', {})).rejects.toMatchObject({ status: 401 });
     await expect(send('ntn_exemple123', 'pages', {})).rejects.toBeInstanceOf(NotionHttpError);
+  });
+});
+
+describe('notionDelete', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('envoie la méthode DELETE et les en-têtes, sans corps, et renvoie la réponse', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ id: 'bloc-1', in_trash: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(notionDelete('ntn_exemple123', 'blocks/bloc-1')).resolves.toEqual({ id: 'bloc-1', in_trash: true });
+    expect(fetchMock).toHaveBeenCalledWith('https://api.notion.com/v1/blocks/bloc-1', {
+      method: 'DELETE',
+      headers: {
+        Authorization: 'Bearer ntn_exemple123',
+        'Notion-Version': NOTION_VERSION,
+        'Content-Type': 'application/json',
+      },
+      body: undefined,
+    });
+  });
+
+  it('échoue avec NotionNetworkError sans réseau', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('NetworkError'))));
+
+    await expect(notionDelete('ntn_exemple123', 'blocks/bloc-1')).rejects.toBeInstanceOf(NotionNetworkError);
+  });
+
+  it('échoue avec NotionHttpError et son statut sur une réponse non réussie', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })));
+
+    await expect(notionDelete('ntn_exemple123', 'blocks/bloc-1')).rejects.toMatchObject({ status: 404 });
+    await expect(notionDelete('ntn_exemple123', 'blocks/bloc-1')).rejects.toBeInstanceOf(NotionHttpError);
   });
 });

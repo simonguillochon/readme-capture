@@ -7,8 +7,19 @@ import caretUp from './icons/caret-up-light.svg';
 import check from './icons/check-light.svg';
 import eye from './icons/eye-light.svg';
 import eyeSlash from './icons/eye-slash-light.svg';
+import pencilSimple from './icons/pencil-simple-light.svg';
+import trash from './icons/trash-light.svg';
 
-const icons = { 'arrow-right': arrowRight, 'caret-down': caretDown, 'caret-up': caretUp, check, eye, 'eye-slash': eyeSlash };
+const icons = {
+  'arrow-right': arrowRight,
+  'caret-down': caretDown,
+  'caret-up': caretUp,
+  check,
+  eye,
+  'eye-slash': eyeSlash,
+  'pencil-simple': pencilSimple,
+  trash,
+};
 
 defineProps<{ name: keyof typeof icons }>();
 </script>

@@ -23,6 +23,6 @@ withDefaults(
     :disabled="disabled"
     :aria-invalid="invalid || undefined"
     class="h-[40px] w-full rounded-sm border bg-surface-elevated px-[14px] py-[10px] font-sans text-[16px] leading-[1.6] text-text-primary outline-none placeholder:text-text-tertiary focus:border-border-accent focus:shadow-[inset_0_0_0_1px_var(--color-border-accent)] disabled:border-border-subtle disabled:bg-surface-secondary disabled:opacity-60"
-    :class="invalid ? 'border-error' : 'border-border-default'"
+    :class="invalid ? 'border-feedback-error' : 'border-border-default'"
   />
 </template>
