@@ -63,12 +63,13 @@ La release SHALL contenir le fichier `readme-capture-X.Y.Z.xpi`, signé par Mozi
 - **ET** ni la release ni le tag `v1.0.2` ne sont créés
 
 ### Requirement: Générer les notes de release
-Les notes de la release SHALL être générées par GitHub à partir des commits depuis la release précédente.
+Les notes de la release SHALL être générées par GitHub et contenir le lien de comparaison avec la release précédente.
 
 #### Scenario: Nominal — Notes de la release
 - **ÉTANT DONNÉ QUE** trois commits ont été poussés depuis la release `v1.0.1`
 - **LORSQUE** la release `v1.0.2` est créée
-- **ALORS** ses notes listent les changements depuis `v1.0.1`
+- **ALORS** ses notes contiennent le lien « Full Changelog » de comparaison entre `v1.0.1` et `v1.0.2`
+- **ET** elles listent les pull requests fusionnées depuis `v1.0.1`, s'il y en a
 
 ### Requirement: Ne jamais exposer les secrets
 Le jeton Notion de test, l'ID de la base de test et les clés d'API addons.mozilla.org MUST être lus uniquement depuis les secrets GitHub, et MUST n'apparaître ni dans le dépôt, ni dans les journaux du workflow, ni dans la release.
