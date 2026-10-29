@@ -38,12 +38,27 @@ L'extension reste chargée jusqu'à la fermeture de Zen.
 
 La version signée reste installée après un redémarrage de Zen. Elle est signée par Mozilla en distribution non listée : elle n'apparaît pas dans le catalogue d'addons.mozilla.org.
 
-1. Construire les archives : `npm run zip`. Le dossier `.output/` contient `readme-capture-<version>-firefox.zip` (l'extension) et `readme-capture-<version>-sources.zip` (ses sources).
-2. Sur addons.mozilla.org, dans le Developer Hub, cliquer sur « Submit a New Add-on », choisir « On your own », puis envoyer `readme-capture-<version>-firefox.zip`. Quand le site demande les sources, envoyer `readme-capture-<version>-sources.zip`, avec la consigne de reconstruction : `npm ci`, puis `npm run zip`.
-3. Une fois l'extension signée, télécharger le fichier `.xpi` signé.
-4. Dans Zen, ouvrir `about:addons`, cliquer sur la roue dentée, puis sur « Installer un module depuis un fichier… », et sélectionner le fichier `.xpi`.
+1. Sur la page des releases du dépôt GitHub, ouvrir la dernière release et télécharger le fichier `readme-capture-<version>.xpi`.
+2. Dans Zen, ouvrir `about:addons`, cliquer sur la roue dentée, puis sur « Installer un module depuis un fichier… », et sélectionner le fichier `.xpi`.
 
-Mise à jour : augmenter la version dans `package.json`, puis reprendre les étapes 1 à 4 en choisissant « Upload New Version » sur la page de l'extension dans le Developer Hub. Chaque nouvelle signature exige une version supérieure à la précédente. La configuration de la connexion à Notion est conservée.
+Mise à jour : installer de la même façon le `.xpi` d'une release plus récente. La configuration de la connexion à Notion est conservée.
+
+## Intégration continue et releases
+
+Le workflow GitHub Actions `.github/workflows/ci.yml` s'exécute à chaque push sur `main` et à chaque pull request :
+
+- il lance `npm run typecheck`, `npm test`, `npm run openspec:validate` et `npm run test:contract` ;
+- sur un push sur `main` dont toutes les vérifications passent, si le tag `v<version>` de la version de `package.json` n'existe pas encore, il fait signer l'extension par Mozilla en distribution non listée, puis crée la release `v<version>` avec le fichier `.xpi` signé et des notes générées par GitHub.
+
+Publier une version : augmenter la version dans `package.json`, committer, puis pousser sur `main`. Chaque nouvelle signature exige une version supérieure à la précédente.
+
+Configuration à faire une seule fois dans GitHub :
+
+1. Dans *Settings → Secrets and variables → Actions*, créer les secrets du dépôt `NOTION_TEST_TOKEN` et `NOTION_TEST_DATABASE_ID`, avec les mêmes valeurs que dans le `.env`.
+2. Dans *Settings → Environments*, créer l'environnement `release` et le limiter à la branche `main`.
+3. Dans cet environnement, créer les secrets `AMO_API_KEY` et `AMO_API_SECRET`, avec l'émetteur JWT et le secret JWT créés sur la page des clés d'API d'addons.mozilla.org.
+
+Les secrets ne sont plus lisibles après leur enregistrement, sont masqués dans les journaux du workflow et ne sont pas transmis aux pull requests venant d'un fork : sur une telle pull request, les tests de contrat échouent avec « Secrets des tests de contrat indisponibles ».
 
 ## Permissions
 

@@ -8,6 +8,9 @@ node_modules/
 # Secrets locaux des tests de contrat
 .env
 
+# Extension signée par web-ext
+web-ext-artifacts/
+
 # JAR Karate téléchargé et rapports des tests de contrat
 tests/contract/.karate/
 

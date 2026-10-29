@@ -2,7 +2,7 @@
   "name": "readme-capture",
   "description": "Extension Firefox de capture de contenus de veille vers la base Notion Readme center",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "wxt -b firefox",
@@ -21,6 +21,7 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.5",
     "vue": "^3.5.44",
+    "web-ext": "10.8.0",
     "wxt": "^0.21.4"
   }
 }
