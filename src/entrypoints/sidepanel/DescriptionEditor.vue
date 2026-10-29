@@ -7,12 +7,15 @@ import DsButton from '@/components/DsButton.vue';
 import DsField from '@/components/DsField.vue';
 import DsMessage from '@/components/DsMessage.vue';
 import DsTextarea from '@/components/DsTextarea.vue';
-import { useCaptureStore } from '@/capture/capture-store';
+import ErrorNotice from './ErrorNotice.vue';
+import { finishCapture, useCaptureStore } from '@/capture/capture-store';
 import { formatCharacterCount } from '@/capture/description';
 import type { NotionConfig } from '@/config/notion-config';
+import { failureNotice, RATE_LIMITED_NOTICE } from '@/notion/error-actions';
 import { itemErrorMessage } from '@/notion/errors';
 import { buildDescriptionBody } from '@/notion/item-payload';
 import { updateItem } from '@/notion/items';
+import { withRateLimitRetry } from '@/notion/retry';
 
 const props = defineProps<{ config: NotionConfig; pageId: string }>();
 
@@ -35,17 +38,29 @@ watch(dirty, (value) => {
   if (value) confirmed.value = false;
 });
 
+// Relance du dernier enregistrement échoué, avec le texte envoyé (US-10, design.md, décision 5).
+let retrySave: () => Promise<void> = async () => {};
+
 async function saveDescription() {
   if (saving.value || !dirty.value) return;
+  await save(text.value.trim());
+}
+
+async function save(sent: string) {
+  if (saving.value) return;
   saving.value = true;
   error.value = null;
-  const sent = text.value.trim();
   try {
-    await updateItem(props.config, props.pageId, buildDescriptionBody(sent));
+    await withRateLimitRetry(
+      () => updateItem(props.config, props.pageId, buildDescriptionBody(sent)),
+      () => (error.value = RATE_LIMITED_NOTICE),
+    );
+    error.value = null;
     savedText.value = sent;
     confirmed.value = true;
   } catch (failure) {
-    error.value = itemErrorMessage(failure);
+    error.value = failureNotice(itemErrorMessage(failure), 'item');
+    retrySave = () => save(sent);
   }
   saving.value = false;
 }
@@ -62,7 +77,14 @@ async function saveDescription() {
     </DsField>
     <DsMessage v-if="confirmed" variant="success">Description enregistrée dans Readme center</DsMessage>
     <div v-if="dirty || saving" class="flex flex-col gap-2">
-      <DsMessage v-if="error" variant="error">{{ error }}</DsMessage>
+      <ErrorNotice
+        v-if="error"
+        :message="error.message"
+        :action="error.action"
+        :busy="saving"
+        @retry="() => retrySave()"
+        @finish="() => finishCapture()"
+      />
       <div>
         <DsButton size="sm" :disabled="saving" @click="saveDescription">
           {{ saving ? 'Enregistrement en cours…' : 'Enregistrer la description' }}

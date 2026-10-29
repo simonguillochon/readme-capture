@@ -1,5 +1,6 @@
-import { NotionHttpError, notionGet } from './client';
+import { notionGet } from './client';
 import { DatabaseStructureError, errorMessage, type ErrorMessage } from './errors';
+import { withRateLimitRetry } from './retry';
 
 interface DatabaseResponse {
   title: { plain_text: string }[];
@@ -53,17 +54,6 @@ export class VerificationError extends Error {
   }
 }
 
-// Réessais après une limitation (429) : 3 au maximum, 1 s si Retry-After est absent ou illisible (choix de l'utilisatrice).
-const MAX_RATE_LIMIT_RETRIES = 3;
-const DEFAULT_RETRY_AFTER_SECONDS = 1;
-
-function retryDelayMs(retryAfter: string | null): number {
-  const seconds = retryAfter === null ? Number.NaN : Number(retryAfter);
-  return (Number.isFinite(seconds) && seconds >= 0 ? seconds : DEFAULT_RETRY_AFTER_SECONDS) * 1000;
-}
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 /**
  * Vérifie la connexion et relance la vérification après le délai indiqué par Notion en cas de limitation.
  * `onRateLimited` est appelé avant chaque attente, pour afficher « Notion limite les appels ».
@@ -73,16 +63,9 @@ export async function verifyConnection(
   databaseId: string,
   onRateLimited: () => void = () => {},
 ): Promise<VerifiedDatabase> {
-  for (let retries = 0; ; retries++) {
-    try {
-      return await verifyDatabase(token, databaseId);
-    } catch (error) {
-      if (error instanceof NotionHttpError && error.status === 429 && retries < MAX_RATE_LIMIT_RETRIES) {
-        onRateLimited();
-        await sleep(retryDelayMs(error.retryAfter));
-        continue;
-      }
-      throw new VerificationError(errorMessage(error));
-    }
+  try {
+    return await withRateLimitRetry(() => verifyDatabase(token, databaseId), onRateLimited);
+  } catch (error) {
+    throw new VerificationError(errorMessage(error));
   }
 }

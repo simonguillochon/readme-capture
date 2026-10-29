@@ -10,6 +10,7 @@ import DsField from '@/components/DsField.vue';
 import DsInput from '@/components/DsInput.vue';
 import DsLink from '@/components/DsLink.vue';
 import DsMessage from '@/components/DsMessage.vue';
+import ErrorNotice from './ErrorNotice.vue';
 import DescriptionEditor from './DescriptionEditor.vue';
 import ExtractCapture from './ExtractCapture.vue';
 import { finishCapture, hasUnsavedChanges, isSending, saveCaptureNow, useCaptureStore } from '@/capture/capture-store';
@@ -20,9 +21,11 @@ import { normalizeLinkedinProfile } from '@/capture/linkedin-profile';
 import { buildPrefill } from '@/capture/prefill';
 import { normalizeUrl } from '@/capture/url-normalization';
 import type { NotionConfig } from '@/config/notion-config';
+import { failureNotice, RATE_LIMITED_NOTICE, type Notice } from '@/notion/error-actions';
 import { errorMessage, itemErrorMessage } from '@/notion/errors';
 import { buildUpdatePageBody } from '@/notion/item-payload';
 import { createItem, findItemByUrl, updateItem } from '@/notion/items';
+import { withRateLimitRetry } from '@/notion/retry';
 import { fetchThemes } from '@/notion/themes';
 
 const props = defineProps<{ config: NotionConfig }>();
@@ -43,7 +46,8 @@ const language = toRef(store.form, 'language');
 const themes = toRef(store.form, 'themes');
 
 const themeOptions = ref<string[]>([]);
-const themesError = ref<string | null>(null);
+const themesError = ref<Notice | null>(null);
+const themesLoading = ref(false);
 
 // Étape de la création de l'item (design.md, décision 7), puis de l'enregistrement des modifications (US-05).
 const status = toRef(store, 'status');
@@ -149,12 +153,21 @@ function onAuthorLinkedinBlur() {
   if (normalized !== null) authorLinkedin.value = normalized;
 }
 
+/** Lit les thèmes ; « Recharger les thèmes » relance la lecture (US-10, design.md, décisions 2 et 5). */
 async function loadThemes() {
+  if (themesLoading.value) return;
+  themesLoading.value = true;
+  themesError.value = null;
   try {
-    themeOptions.value = await fetchThemes(props.config);
+    themeOptions.value = await withRateLimitRetry(
+      () => fetchThemes(props.config),
+      () => (themesError.value = RATE_LIMITED_NOTICE),
+    );
+    themesError.value = null;
   } catch (error) {
-    themesError.value = errorMessage(error);
+    themesError.value = failureNotice(errorMessage(error), 'themes');
   }
+  themesLoading.value = false;
 }
 
 let windowId: number | undefined;
@@ -212,14 +225,27 @@ const disclosureProps = computed(() =>
       },
 );
 
+// Relance de la dernière création ou du dernier enregistrement échoués, avec leurs données d'origine (US-10, décision 5).
+let retryCreation: () => Promise<void> = async () => {};
+let retrySave: () => Promise<void> = async () => {};
+
 /** Crée l'item ; en cas d'échec, le formulaire est conservé et « Ajouter » redevient actif. */
 async function addItem() {
   if (!valid.value || status.value !== 'editing') return;
+  await create({ ...formState.value, themes: [...formState.value.themes] });
+}
+
+async function create(form: CaptureFormState) {
+  if (status.value !== 'editing') return;
   status.value = 'creating';
   creationError.value = null;
-  const sent = normalizeForm(formState.value);
+  const sent = normalizeForm(form);
   try {
-    const item = await createItem(props.config, formState.value, new Date());
+    const item = await withRateLimitRetry(
+      () => createItem(props.config, form, new Date()),
+      () => (creationError.value = RATE_LIMITED_NOTICE),
+    );
+    creationError.value = null;
     store.item = { id: item.id, url: item.url };
     store.databaseId = props.config.databaseId;
     savedValues.value = sent;
@@ -230,25 +256,37 @@ async function addItem() {
     // La capture est conservée dès la création de l'item (US-09, design.md, décision 4).
     void saveCaptureNow();
   } catch (error) {
-    creationError.value = errorMessage(error);
+    creationError.value = failureNotice(errorMessage(error), 'action');
+    retryCreation = () => create(form);
     status.value = 'editing';
   }
 }
 
 /** Enregistre les champs modifiés ; en cas d'échec, le formulaire et les valeurs enregistrées sont conservés (US-05, design.md, décision 7). */
 async function saveChanges() {
-  if (!valid.value || !dirty.value || status.value !== 'created' || createdItemId.value === null || savedValues.value === null) return;
+  if (!valid.value || !dirty.value) return;
+  await save(normalizeForm(formState.value));
+}
+
+async function save(sent: CaptureFormState) {
+  const itemId = createdItemId.value;
+  const saved = savedValues.value;
+  if (status.value !== 'created' || itemId === null || saved === null) return;
   status.value = 'saving';
   saveError.value = null;
-  const sent = normalizeForm(formState.value);
   try {
-    await updateItem(props.config, createdItemId.value, buildUpdatePageBody(savedValues.value, sent));
+    await withRateLimitRetry(
+      () => updateItem(props.config, itemId, buildUpdatePageBody(saved, sent)),
+      () => (saveError.value = RATE_LIMITED_NOTICE),
+    );
+    saveError.value = null;
     savedValues.value = sent;
     confirmation.value = 'Modifications enregistrées dans Readme center';
     store.confirmationVisible = true;
     expanded.value = false;
   } catch (error) {
-    saveError.value = itemErrorMessage(error);
+    saveError.value = failureNotice(itemErrorMessage(error), 'item');
+    retrySave = () => save(sent);
   }
   status.value = 'created';
 }
@@ -288,7 +326,13 @@ async function saveChanges() {
       </fieldset>
       <fieldset class="flex flex-col gap-2">
         <legend class="mb-2 text-caption text-text-secondary">Thèmes</legend>
-        <DsMessage v-if="themesError" variant="error">{{ themesError }}</DsMessage>
+        <ErrorNotice
+          v-if="themesError"
+          :message="themesError.message"
+          :action="themesError.action"
+          :busy="themesLoading"
+          @retry="loadThemes"
+        />
         <DsCheckbox
           v-for="theme in themeOptions"
           v-else
@@ -299,7 +343,13 @@ async function saveChanges() {
         />
       </fieldset>
       <div v-if="!createdItemUrl" class="flex flex-col gap-2">
-        <DsMessage v-if="creationError" variant="error">{{ creationError }}</DsMessage>
+        <ErrorNotice
+          v-if="creationError"
+          :message="creationError.message"
+          :action="creationError.action"
+          :busy="status === 'creating'"
+          @retry="() => retryCreation()"
+        />
         <div>
           <DsButton size="sm" :disabled="!valid || status === 'creating'" @click="addItem">
             {{ status === 'creating' ? 'Ajout en cours…' : 'Ajouter' }}
@@ -307,7 +357,14 @@ async function saveChanges() {
         </div>
       </div>
       <div v-else-if="status === 'saving' || dirty" class="flex flex-col gap-2">
-        <DsMessage v-if="saveError" variant="error">{{ saveError }}</DsMessage>
+        <ErrorNotice
+          v-if="saveError"
+          :message="saveError.message"
+          :action="saveError.action"
+          :busy="status === 'saving'"
+          @retry="() => retrySave()"
+          @finish="() => finishCapture()"
+        />
         <div>
           <DsButton size="sm" :disabled="!valid || status === 'saving'" @click="saveChanges">
             {{ status === 'saving' ? 'Enregistrement en cours…' : 'Enregistrer les modifications' }}

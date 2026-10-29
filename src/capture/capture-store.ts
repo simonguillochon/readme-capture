@@ -13,6 +13,7 @@ import type { Extract, Section } from './extract-placement';
 import { changedFields } from './form-diff';
 import type { CaptureFormState } from './form-validation';
 import type { SelectionMessage } from './selection-watcher';
+import type { Notice } from '@/notion/error-actions';
 
 /**
  * État de la capture en cours, partagé par `CaptureForm`, `ExtractCapture` et `DescriptionEditor` (US-09, design.md, décision 3).
@@ -35,19 +36,19 @@ export interface CaptureStore {
   status: 'editing' | 'creating' | 'created' | 'saving';
   /** Faux à la reprise : le message de confirmation du formulaire n'est pas repris (décision 5). */
   confirmationVisible: boolean;
-  creationError: string | null;
-  saveError: string | null;
+  creationError: Notice | null;
+  saveError: Notice | null;
   selection: SelectionMessage | null;
   selectionState: 'waiting' | 'selected' | 'unreadable' | 'added';
   chosen: string | null;
   adding: boolean;
-  addError: string | null;
+  addError: Notice | null;
   editing: { blockId: string; text: string; sectionId: string } | null;
   busy: { blockId: string; kind: 'saving' | 'deleting' } | null;
-  extractError: { blockId: string; message: string } | null;
-  sectionError: string | null;
+  extractError: { blockId: string; notice: Notice } | null;
+  sectionError: Notice | null;
   descriptionSaving: boolean;
-  descriptionError: string | null;
+  descriptionError: Notice | null;
   descriptionConfirmed: boolean;
   /** Incrémenté à chaque remise à zéro : sert de `key` au formulaire, pour le recréer (décision 7). */
   resets: number;
@@ -197,14 +198,15 @@ export async function finishCapture(): Promise<void> {
  * Reporte dans ce panneau un changement de la capture fait dans un autre (décision 6) : une capture plus récente
  * d'un autre panneau remplace les champs persistants, et sa suppression ramène le formulaire de préparation.
  */
-function onStorageChanged(changes: Record<string, { newValue?: unknown }>, area: string, databaseId: string) {
+function onStorageChanged(changes: Record<string, { newValue?: unknown }>, area: string) {
   const change = changes[CAPTURE_SESSION_KEY];
   if (area !== 'local' || change === undefined) return;
   if (change.newValue === undefined) {
     if (store.item !== null) resetCaptureStore();
     return;
   }
-  const session = parseSession(change.newValue, databaseId);
+  if (configuredDatabaseId === null) return;
+  const session = parseSession(change.newValue, configuredDatabaseId);
   if (session === null || session.writer === writer || session.revision <= revision) return;
   applySession(session);
   if (store.status === 'editing') {
@@ -219,12 +221,24 @@ function onStorageChanged(changes: Record<string, { newValue?: unknown }>, area:
   if (store.editing && !store.extracts.some((extract) => extract.blockId === store.editing?.blockId)) store.editing = null;
 }
 
+// Base de la configuration enregistrée, suivie par `App.vue` (US-10, design.md, décision 6).
+let configuredDatabaseId: string | null = null;
+let loaded = false;
+
+/** Base de la configuration enregistrée, pour reconnaître les captures des autres panneaux. */
+export function setConfiguredDatabase(databaseId: string | null) {
+  configuredDatabaseId = databaseId;
+}
+
 /**
  * Reprend la capture conservée pour la base `databaseId`, s'il y en a une valide (décisions 3 et 5), puis écrit
  * chaque changement des champs persistants, regroupé avec les suivants pendant 300 ms (décision 4), et écoute
  * les changements des autres panneaux (décision 6).
  */
 export async function loadCaptureStore(databaseId: string): Promise<void> {
+  setConfiguredDatabase(databaseId);
+  if (loaded) return;
+  loaded = true;
   const session = await readCaptureSession(databaseId);
   if (session) {
     applySession(session);
@@ -242,5 +256,5 @@ export async function loadCaptureStore(databaseId: string): Promise<void> {
     },
     { deep: true },
   );
-  browser.storage.onChanged.addListener((changes, area) => onStorageChanged(changes, area, databaseId));
+  browser.storage.onChanged.addListener(onStorageChanged);
 }

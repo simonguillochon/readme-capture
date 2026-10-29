@@ -8,9 +8,10 @@ import DsField from '@/components/DsField.vue';
 import DsIconButton from '@/components/DsIconButton.vue';
 import DsInput from '@/components/DsInput.vue';
 import DsMessage from '@/components/DsMessage.vue';
+import ErrorNotice from './ErrorNotice.vue';
 import DsSelect from '@/components/DsSelect.vue';
 import DsTextarea from '@/components/DsTextarea.vue';
-import { useCaptureStore } from '@/capture/capture-store';
+import { finishCapture, useCaptureStore } from '@/capture/capture-store';
 import {
   deleteExtract,
   editExtract,
@@ -23,9 +24,11 @@ import {
 import { watchActiveTabSelection, type SelectionMessage, type SelectionWatch } from '@/capture/selection-watcher';
 import type { NotionConfig } from '@/config/notion-config';
 import { NotionHttpError } from '@/notion/client';
+import { failureNotice, RATE_LIMITED_NOTICE } from '@/notion/error-actions';
 import { errorMessage, itemErrorMessage } from '@/notion/errors';
 import type { HeadingLevel } from '@/notion/extract-blocks';
 import { appendBlocks, deleteBlock, updateQuote } from '@/notion/extracts';
+import { withRateLimitRetry } from '@/notion/retry';
 
 const props = defineProps<{ config: NotionConfig; pageId: string }>();
 
@@ -147,11 +150,26 @@ function target(): ExtractTarget {
 async function addExtract() {
   const text = selection.value?.text;
   if (!canAdd.value || !text) return;
-  const placement = placeExtract({ sections: sections.value, extracts: extracts.value }, target(), text);
+  await add(text, target());
+}
+
+// Relance du dernier ajout, de la dernière modification ou suppression, et de la dernière suppression de titre échoués,
+// depuis l'état courant (US-10, design.md, décision 5).
+let retryAdd: () => Promise<void> = async () => {};
+let retryExtract: () => Promise<void> = async () => {};
+let retrySection: () => Promise<void> = async () => {};
+
+async function add(text: string, extractTarget: ExtractTarget) {
+  if (adding.value || busy.value !== null) return;
+  const placement = placeExtract({ sections: sections.value, extracts: extracts.value }, extractTarget, text);
   adding.value = true;
   error.value = null;
   try {
-    const blockIds = await appendBlocks(props.config, props.pageId, placement.blocks, placement.position);
+    const blockIds = await withRateLimitRetry(
+      () => appendBlocks(props.config, props.pageId, placement.blocks, placement.position),
+      () => (error.value = RATE_LIMITED_NOTICE),
+    );
+    error.value = null;
     const state = placement.apply(blockIds);
     const quoteId = blockIds.at(-1);
     // La clé du surlignage est gardée dans l'extrait, pour le retirer à sa suppression (US-07, design.md, décision 5).
@@ -165,7 +183,8 @@ async function addExtract() {
     addedText = text;
     selectionState.value = 'added';
   } catch (caught) {
-    error.value = itemErrorMessage(caught);
+    error.value = failureNotice(itemErrorMessage(caught), 'item');
+    retryAdd = () => add(text, extractTarget);
   }
   adding.value = false;
 }
@@ -193,24 +212,54 @@ async function send(operation: ExtractOperation): Promise<string | undefined> {
  * Envoie les opérations une par une, dans l'ordre, puis applique le nouvel état et renvoie le nombre d'opérations
  * réussies (US-07, design.md, décision 4). Une réponse 400 ou 404 à une suppression compte comme une réussite.
  */
-async function run(change: ExtractChange, blockId: string, kind: 'saving' | 'deleting'): Promise<number> {
+async function run(
+  change: ExtractChange,
+  blockId: string,
+  kind: 'saving' | 'deleting',
+  retryFromStart: () => Promise<void>,
+): Promise<number> {
   busy.value = { blockId, kind };
   extractError.value = null;
   sectionError.value = null;
   let completed = 0;
   let newBlockId: string | undefined;
   for (const operation of change.operations) {
+    // Chaque appel réessaie de son côté en cas de limitation (US-10, design.md, décision 2).
+    const onRateLimited = () => {
+      if (operation.kind === 'delete-section') sectionError.value = RATE_LIMITED_NOTICE;
+      else extractError.value = { blockId, notice: RATE_LIMITED_NOTICE };
+    };
     try {
-      newBlockId = (await send(operation)) ?? newBlockId;
+      newBlockId = (await withRateLimitRetry(() => send(operation), onRateLimited)) ?? newBlockId;
+      extractError.value = null;
+      sectionError.value = null;
     } catch (caught) {
       const gone = caught instanceof NotionHttpError && (caught.status === 400 || caught.status === 404);
+      extractError.value = null;
+      sectionError.value = null;
       if (operation.kind === 'update' || operation.kind === 'append') {
-        extractError.value = { blockId, message: itemErrorMessage(caught) };
+        extractError.value = { blockId, notice: failureNotice(itemErrorMessage(caught), 'extract') };
+        retryExtract = retryFromStart;
         break;
       }
       if (!gone) {
-        if (operation.kind === 'delete-quote') extractError.value = { blockId, message: errorMessage(caught) };
-        else sectionError.value = errorMessage(caught);
+        if (operation.kind === 'delete-quote') {
+          extractError.value = { blockId, notice: failureNotice(errorMessage(caught), 'extract') };
+          // Reste à supprimer l'ancienne citation : après un déplacement, sans retirer le surlignage de l'extrait déplacé.
+          const quoteId = operation.blockId;
+          retryExtract = async () => {
+            const extract = extracts.value.find((candidate) => candidate.blockId === quoteId);
+            if (!extract) return;
+            if (kind === 'deleting') await removeExtract(extract);
+            else await run(deleteExtract(currentState(), quoteId), quoteId, 'deleting', retryExtract);
+          };
+        } else {
+          sectionError.value = failureNotice(errorMessage(caught), 'extract');
+          const { sectionId } = operation;
+          retrySection = async () => {
+            if (busy.value === null) await run(deleteSection(sectionId), sectionId, 'deleting', retrySection);
+          };
+        }
         break;
       }
     }
@@ -230,20 +279,37 @@ async function run(change: ExtractChange, blockId: string, kind: 'saving' | 'del
   return completed;
 }
 
+const currentState = () => ({ sections: sections.value, extracts: extracts.value });
+
+/** Suppression du seul titre d'une section restée vide, relancée après un échec. */
+function deleteSection(sectionId: string): ExtractChange {
+  const state = currentState();
+  return {
+    operations: [{ kind: 'delete-section', sectionId }],
+    apply: (completed) => (completed === 0 ? state : { ...state, sections: state.sections.filter((section) => section.id !== sectionId) }),
+  };
+}
+
 /** Enregistre le texte ou la section modifiés ; en cas d'échec, la modification en cours est conservée. */
 async function saveExtract() {
   const current = editing.value;
   if (!current || !canSave.value) return;
-  const sectionId = current.sectionId === 'none' ? null : current.sectionId;
-  const change = editExtract({ sections: sections.value, extracts: extracts.value }, current.blockId, current.text, sectionId);
+  await saveEdit({ ...current });
+}
+
+async function saveEdit(edit: { blockId: string; text: string; sectionId: string }) {
+  if (busy.value !== null || !extracts.value.some((extract) => extract.blockId === edit.blockId)) return;
+  const sectionId = edit.sectionId === 'none' ? null : edit.sectionId;
+  const change = editExtract(currentState(), edit.blockId, edit.text, sectionId);
   // Dès que la citation est écrite, la modification se ferme ; un échec ultérieur s'affiche sous l'ancien extrait.
-  if ((await run(change, current.blockId, 'saving')) > 0) editing.value = null;
+  if ((await run(change, edit.blockId, 'saving', () => saveEdit(edit))) > 0) editing.value = null;
 }
 
 /** Supprime l'extrait sans confirmation, puis retire son surlignage de la page lue (US-07, décisions 4 et 5). */
 async function removeExtract(extract: Extract) {
-  const change = deleteExtract({ sections: sections.value, extracts: extracts.value }, extract.blockId);
-  const completed = await run(change, extract.blockId, 'deleting');
+  if (busy.value !== null) return;
+  const change = deleteExtract(currentState(), extract.blockId);
+  const completed = await run(change, extract.blockId, 'deleting', () => removeExtract(extract));
   if (completed > 0 && extract.highlight) selectionWatch?.unhighlight(extract.highlight);
 }
 </script>
@@ -275,7 +341,14 @@ async function removeExtract(extract: Extract) {
       </fieldset>
     </template>
     <div class="flex flex-col gap-2">
-      <DsMessage v-if="error" variant="error">{{ error }}</DsMessage>
+      <ErrorNotice
+        v-if="error"
+        :message="error.message"
+        :action="error.action"
+        :busy="adding"
+        @retry="() => retryAdd()"
+        @finish="() => finishCapture()"
+      />
       <div>
         <DsButton size="sm" :disabled="!canAdd" @click="addExtract">{{ adding ? 'Ajout en cours…' : "Ajouter l'extrait" }}</DsButton>
       </div>
@@ -315,12 +388,24 @@ async function removeExtract(extract: Extract) {
                   @click="removeExtract(extract)"
                 />
               </div>
-              <DsMessage v-if="extractError?.blockId === extract.blockId" variant="error">{{ extractError.message }}</DsMessage>
+              <ErrorNotice
+                v-if="extractError?.blockId === extract.blockId"
+                :message="extractError.notice.message"
+                :action="extractError.notice.action"
+                :busy="busy !== null"
+                @retry="() => retryExtract()"
+              />
             </li>
           </ul>
         </div>
       </template>
     </div>
-    <DsMessage v-if="sectionError" variant="error">{{ sectionError }}</DsMessage>
+    <ErrorNotice
+      v-if="sectionError"
+      :message="sectionError.message"
+      :action="sectionError.action"
+      :busy="busy !== null"
+      @retry="() => retrySection()"
+    />
   </section>
 </template>

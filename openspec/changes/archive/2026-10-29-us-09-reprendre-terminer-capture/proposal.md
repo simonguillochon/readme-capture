@@ -5,7 +5,7 @@
 > **Priorité :** Must
 > **PRD :** [PRD-2610-001](../../../docs/prd/PRD-2610-001.md)
 
-> ⚠️ **Points en hypothèse à confirmer avant lancement dev**
+> ✅ **Points en hypothèse confirmés par l'utilisatrice le 29/10/2026**
 > 1. « Terminer » remet le panneau à zéro mais ne le ferme pas, pour enchaîner les captures d'une même session de veille. Le panneau se ferme toujours avec le bouton de l'extension.
 > 2. « Terminer » est inactif pendant un envoi à Notion (création, enregistrement, ajout, modification ou suppression d'un extrait).
 
