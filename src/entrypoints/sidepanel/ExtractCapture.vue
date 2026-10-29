@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Zone des extraits, affichée une fois l'item créé (US-06, design.md, décisions 3 et 7 ; US-07, décisions 4 et 6).
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+// Son état vit dans l'état partagé du panneau (US-09, design.md, décision 3).
+import { computed, onMounted, onUnmounted, ref, toRef, watch } from 'vue';
 import DsButton from '@/components/DsButton.vue';
 import DsChoiceGroup from '@/components/DsChoiceGroup.vue';
 import DsField from '@/components/DsField.vue';
@@ -9,6 +10,7 @@ import DsInput from '@/components/DsInput.vue';
 import DsMessage from '@/components/DsMessage.vue';
 import DsSelect from '@/components/DsSelect.vue';
 import DsTextarea from '@/components/DsTextarea.vue';
+import { useCaptureStore } from '@/capture/capture-store';
 import {
   deleteExtract,
   editExtract,
@@ -17,7 +19,6 @@ import {
   type ExtractChange,
   type ExtractOperation,
   type ExtractTarget,
-  type Section,
 } from '@/capture/extract-placement';
 import { watchActiveTabSelection, type SelectionMessage, type SelectionWatch } from '@/capture/selection-watcher';
 import type { NotionConfig } from '@/config/notion-config';
@@ -34,30 +35,32 @@ const LEVELS: { value: '1' | '2' | '3'; label: string }[] = [
   { value: '3', label: 'H3' },
 ];
 
-const selection = ref<SelectionMessage | null>(null);
-const selectionState = ref<'waiting' | 'selected' | 'unreadable' | 'added'>('waiting');
+const store = useCaptureStore();
 
-const sections = ref<Section[]>([]);
-const extracts = ref<Extract[]>([]);
+const selection = toRef(store, 'selection');
+const selectionState = toRef(store, 'selectionState');
+
+const sections = toRef(store, 'sections');
+const extracts = toRef(store, 'extracts');
 
 // Section choisie : identifiant de section, 'new' ou 'none' ; la dernière utilisée est pré-sélectionnée.
-const chosen = ref<string | null>('none');
-const lastUsed = ref('none');
+const chosen = toRef(store, 'chosen');
+const lastUsed = toRef(store, 'lastUsed');
 const newSection = ref<{ title: string; level: '1' | '2' | '3' | null }>({ title: '', level: '1' });
 
-const adding = ref(false);
-const error = ref<string | null>(null);
+const adding = toRef(store, 'adding');
+const error = toRef(store, 'addError');
 
 // Texte du dernier extrait ajouté : l'état « Extrait ajouté » dure jusqu'à une sélection différente.
 let addedText: string | null = null;
 
 // Extrait en cours de modification : un seul à la fois ; la section vaut 'none' pour « Sans section » (US-07, décision 6).
-const editing = ref<{ blockId: string; text: string; sectionId: string } | null>(null);
+const editing = toRef(store, 'editing');
 // Action en cours d'envoi : toutes les actions de la liste et « Ajouter l'extrait » sont inactives (US-07, décision 4).
-const busy = ref<{ blockId: string; kind: 'saving' | 'deleting' } | null>(null);
+const busy = toRef(store, 'busy');
 // Erreur affichée sous un extrait, et erreur de suppression d'un titre de section, affichée sous la liste.
-const extractError = ref<{ blockId: string; message: string } | null>(null);
-const sectionError = ref<string | null>(null);
+const extractError = toRef(store, 'extractError');
+const sectionError = toRef(store, 'sectionError');
 
 const sectionOptions = computed(() => [
   ...sections.value.map((section) => ({ value: section.id, label: section.title })),

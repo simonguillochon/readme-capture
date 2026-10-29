@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Formulaire de préparation de l'item (design.md, décisions 8 et 9). Rien n'est écrit dans le stockage local.
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+// Formulaire de préparation de l'item (design.md, décisions 8 et 9). Rien n'est écrit dans le stockage local avant la création.
+// La capture vit dans l'état partagé du panneau (US-09, design.md, décision 3).
+import { computed, onMounted, onUnmounted, ref, toRef } from 'vue';
 import DsButton from '@/components/DsButton.vue';
 import DsCheckbox from '@/components/DsCheckbox.vue';
 import DsChoiceGroup from '@/components/DsChoiceGroup.vue';
@@ -11,6 +12,7 @@ import DsLink from '@/components/DsLink.vue';
 import DsMessage from '@/components/DsMessage.vue';
 import DescriptionEditor from './DescriptionEditor.vue';
 import ExtractCapture from './ExtractCapture.vue';
+import { finishCapture, hasUnsavedChanges, isSending, saveCaptureNow, useCaptureStore } from '@/capture/capture-store';
 import { changedFields, normalizeForm } from '@/capture/form-diff';
 import { isFormValid, type CaptureFormState, type Language } from '@/capture/form-validation';
 import { readActiveTabPage } from '@/capture/page-snapshot';
@@ -31,31 +33,48 @@ const LANGUAGES: { value: Language; label: string }[] = [
   { value: 'es', label: '🇪🇸 Espagnol' },
 ];
 
-const title = ref('');
-const url = ref('');
-const author = ref('');
-const authorLinkedin = ref('');
-const language = ref<Language | null>(null);
-const themes = ref<string[]>([]);
+const store = useCaptureStore();
+
+const title = toRef(store.form, 'title');
+const url = toRef(store.form, 'url');
+const author = toRef(store.form, 'author');
+const authorLinkedin = toRef(store.form, 'authorLinkedin');
+const language = toRef(store.form, 'language');
+const themes = toRef(store.form, 'themes');
 
 const themeOptions = ref<string[]>([]);
 const themesError = ref<string | null>(null);
 
 // Étape de la création de l'item (design.md, décision 7), puis de l'enregistrement des modifications (US-05).
-const status = ref<'editing' | 'creating' | 'created' | 'saving'>('editing');
-const createdItemUrl = ref<string | null>(null);
-const creationError = ref<string | null>(null);
+const status = toRef(store, 'status');
+const createdItemUrl = computed(() => store.item?.url ?? null);
+const creationError = toRef(store, 'creationError');
 
 // Item créé et dernières valeurs enregistrées dans Notion, copie normalisée (US-05, design.md, décision 2).
-const createdItemId = ref<string | null>(null);
-const savedValues = ref<CaptureFormState | null>(null);
-const saveError = ref<string | null>(null);
+const createdItemId = computed(() => store.item?.id ?? null);
+const savedValues = toRef(store, 'savedValues');
+const saveError = toRef(store, 'saveError');
 
 // Libellé du message de confirmation, qui garde le dernier affiché (US-05, design.md, décision 7).
-const confirmation = ref('Item créé dans Readme center');
+const confirmation = toRef(store, 'confirmation');
 
 // Formulaire déplié ou replié une fois l'item créé (US-06, design.md, décision 10).
-const expanded = ref(true);
+const expanded = toRef(store, 'expanded');
+
+// « Terminer » : inactif pendant un envoi, avec une confirmation s'il reste des modifications non enregistrées
+// (US-09, design.md, décisions 7 et 8).
+const sending = computed(() => isSending(store));
+const confirmingFinish = ref(false);
+
+function onFinish() {
+  if (sending.value) return;
+  if (hasUnsavedChanges(store)) confirmingFinish.value = true;
+  else void finishCapture();
+}
+
+function finishAnyway() {
+  if (!sending.value) void finishCapture();
+}
 
 // Vrai dès la première saisie dans « Titre », « URL », « Auteur » ou « LinkedIn de l'auteur » :
 // le formulaire cesse alors de suivre l'onglet actif.
@@ -201,12 +220,15 @@ async function addItem() {
   const sent = normalizeForm(formState.value);
   try {
     const item = await createItem(props.config, formState.value, new Date());
-    createdItemId.value = item.id;
-    createdItemUrl.value = item.url;
+    store.item = { id: item.id, url: item.url };
+    store.databaseId = props.config.databaseId;
     savedValues.value = sent;
     duplicateUrl.value = null;
     expanded.value = false;
     status.value = 'created';
+    store.confirmationVisible = true;
+    // La capture est conservée dès la création de l'item (US-09, design.md, décision 4).
+    void saveCaptureNow();
   } catch (error) {
     creationError.value = errorMessage(error);
     status.value = 'editing';
@@ -223,6 +245,7 @@ async function saveChanges() {
     await updateItem(props.config, createdItemId.value, buildUpdatePageBody(savedValues.value, sent));
     savedValues.value = sent;
     confirmation.value = 'Modifications enregistrées dans Readme center';
+    store.confirmationVisible = true;
     expanded.value = false;
   } catch (error) {
     saveError.value = itemErrorMessage(error);
@@ -293,7 +316,21 @@ async function saveChanges() {
       </div>
     </form>
   </component>
-  <DsMessage v-if="createdItemUrl && status === 'created' && !dirty" variant="success">{{ confirmation }}</DsMessage>
+  <DsMessage v-if="createdItemUrl && status === 'created' && !dirty && store.confirmationVisible" variant="success">{{ confirmation }}</DsMessage>
   <DescriptionEditor v-if="createdItemId" :config="config" :page-id="createdItemId" />
   <ExtractCapture v-if="createdItemId" :config="config" :page-id="createdItemId" />
+  <section v-if="createdItemId" class="mt-2 flex flex-col gap-6">
+    <!-- Atome Divider du DS, horizontal subtle (Figma, page Components, nœud 177:6). -->
+    <hr class="h-px border-0 bg-border-subtle" />
+    <div v-if="confirmingFinish" class="flex flex-col gap-2">
+      <DsMessage variant="warning">Des modifications ne sont pas enregistrées dans Notion</DsMessage>
+      <div class="flex gap-2">
+        <DsButton size="sm" :disabled="sending" @click="finishAnyway">Terminer quand même</DsButton>
+        <DsButton variant="secondary" size="sm" @click="confirmingFinish = false">Annuler</DsButton>
+      </div>
+    </div>
+    <div v-else>
+      <DsButton variant="secondary" :disabled="sending" @click="onFinish">Terminer</DsButton>
+    </div>
+  </section>
 </template>

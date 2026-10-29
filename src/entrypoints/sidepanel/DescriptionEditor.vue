@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // Zone « Description », affichée une fois l'item créé (US-08, design.md, décisions 3, 4, 6 et 7).
 // Le panneau ne connaît que la description qu'il a enregistrée : rien n'est lu depuis Notion.
-import { computed, ref, watch } from 'vue';
+// Son état vit dans l'état partagé du panneau (US-09, design.md, décision 3).
+import { computed, toRef, watch } from 'vue';
 import DsButton from '@/components/DsButton.vue';
 import DsField from '@/components/DsField.vue';
 import DsMessage from '@/components/DsMessage.vue';
 import DsTextarea from '@/components/DsTextarea.vue';
+import { useCaptureStore } from '@/capture/capture-store';
 import { formatCharacterCount } from '@/capture/description';
 import type { NotionConfig } from '@/config/notion-config';
 import { itemErrorMessage } from '@/notion/errors';
@@ -17,12 +19,14 @@ const props = defineProps<{ config: NotionConfig; pageId: string }>();
 // Limite du champ, qui est aussi celle d'un objet texte de Notion (décisions 4 et 5).
 const LIMIT = 2000;
 
-const text = ref('');
+const store = useCaptureStore();
+
+const text = toRef(store.description, 'text');
 // Dernière description enregistrée, sans espaces de début et de fin.
-const savedText = ref('');
-const saving = ref(false);
-const error = ref<string | null>(null);
-const confirmed = ref(false);
+const savedText = toRef(store.description, 'savedText');
+const saving = toRef(store, 'descriptionSaving');
+const error = toRef(store, 'descriptionError');
+const confirmed = toRef(store, 'descriptionConfirmed');
 
 const dirty = computed(() => text.value.trim() !== savedText.value);
 const count = computed(() => formatCharacterCount(text.value.length, LIMIT));
