@@ -8,14 +8,6 @@ export default defineConfig({
   manifestVersion: 3,
   manifest: {
     name: 'Readme Capture',
-    browser_specific_settings: {
-      gecko: {
-        id: 'readme-capture@simonguillochon',
-        data_collection_permissions: {
-          required: ['none'],
-        },
-      },
-    },
     action: {},
     permissions: ['storage', 'scripting'],
     host_permissions: ['<all_urls>'],

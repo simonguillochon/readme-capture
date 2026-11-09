@@ -42,7 +42,6 @@ jobs:
     needs: [checks, contract]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: release
     permissions:
       contents: write
     steps:
@@ -66,27 +65,7 @@ jobs:
           npm ci
           npm run zip
       - if: steps.version.outputs.published == 'false'
-        run: >-
-          npx web-ext sign --channel=unlisted
-          --source-dir .output/firefox-mv3
-          --upload-source-code ".output/readme-capture-$VERSION-sources.zip"
-          --artifacts-dir web-ext-artifacts
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
-          WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
-      - if: steps.version.outputs.published == 'false'
-        run: |
-          shopt -s nullglob
-          xpis=(web-ext-artifacts/*.xpi)
-          if [ "${#xpis[@]}" -ne 1 ]; then
-            exit 1
-          fi
-          mv "${xpis[0]}" "readme-capture-$VERSION.xpi"
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-      - if: steps.version.outputs.published == 'false'
-        run: gh release create "v$VERSION" "readme-capture-$VERSION.xpi" --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
+        run: gh release create "v$VERSION" ".output/readme-capture-$VERSION-chrome.zip" --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
           GH_TOKEN: ${{ github.token }}

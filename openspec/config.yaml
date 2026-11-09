@@ -5,8 +5,8 @@ context: |
   All artifacts must be written in fr.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 
-  Projet : extension Firefox qui capture des contenus de veille vers la base Notion
-  « Readme center ». Usage personnel, navigateur Zen (basé sur Firefox).
+  Projet : extension Chromium qui capture des contenus de veille vers la base Notion
+  « Readme center ». Usage personnel, navigateur Dia (basé sur Chromium).
   Référence fonctionnelle : docs/prd/PRD-2610-001.md (PRD au format SCUB, statut REVIEW).
   Le PRD fait foi pour le pourquoi et le périmètre ; ses sections « Hors scope »
   et « Hypothèses » s'appliquent à tous les changes.
@@ -14,7 +14,7 @@ context: |
   Persona : « l'utilisatrice » (féminin par convention SCUB), propriétaire de la base.
 
   Pile technique actée (ne pas en changer sans accord) :
-  - Extension Firefox Manifest V3, construite avec WXT, Vue 3 et TypeScript strict.
+  - Extension Chromium Manifest V3, construite avec WXT, Vue 3 et TypeScript strict.
   - Interface en Tailwind ; valeurs du design system ds-editorial-tech
     (https://github.com/simonguillochon/ds-editorial-tech) transcrites dans le thème Tailwind.
     Aucun fichier du dépôt du DS n'est copié ni importé.
