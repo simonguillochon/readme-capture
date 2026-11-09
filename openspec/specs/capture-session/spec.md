@@ -6,7 +6,7 @@ Garantit que la capture en cours survit à la fermeture du panneau ou du navigat
 
 ## Requirements
 
-### Requirement: Conserver la capture dès la création de l'item
+### Requirement: Conserver la capture en cours dès la création de l'item
 Dès la création de l'item et à chaque changement ensuite, l'extension SHALL conserver dans son stockage local la capture en cours : l'item, les valeurs des métadonnées enregistrées et en cours, les sections, les extraits, la section pré-sélectionnée, le texte de la description enregistré et en cours, et l'état replié ou déplié du formulaire.
 
 #### Scenario: Nominal — Fermer puis rouvrir le panneau
@@ -16,9 +16,9 @@ Dès la création de l'item et à chaque changement ensuite, l'extension SHALL c
 - **ET** la liste affiche les deux extraits sous « Le constat »
 - **ET** le champ « Description » contient le texte saisi
 
-#### Scenario: Alternatif — Redémarrer Zen
+#### Scenario: Alternatif — Redémarrer Dia
 - **ÉTANT DONNÉ QUE** une capture est en cours
-- **LORSQUE** l'utilisatrice quitte Zen, le relance et ouvre le panneau
+- **LORSQUE** l'utilisatrice quitte Dia, le relance et ouvre le panneau
 - **ALORS** la capture reprend telle qu'elle était
 
 #### Scenario: Alternatif — Modification de métadonnée non enregistrée

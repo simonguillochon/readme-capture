@@ -2,59 +2,50 @@
 
 ## Purpose
 
-Permet d'installer durablement dans Zen une version de l'extension signée par Mozilla en distribution non listée.
+Permet d'installer durablement dans Dia l'extension construite pour Chromium, en extension non empaquetée.
 
 ## Requirements
 
-### Requirement: Déclarer l'absence de collecte de données
-Le manifeste de l'extension SHALL déclarer qu'elle ne collecte aucune donnée, avec `data_collection_permissions` réglé sur `required: ["none"]` et aucune catégorie facultative.
-
-#### Scenario: Nominal — Déclaration affichée à l'installation
-- **ÉTANT DONNÉ QUE** l'utilisatrice dispose du fichier `.xpi` signé de l'extension
-- **LORSQUE** elle l'installe dans Zen
-- **ALORS** la fenêtre d'installation indique que l'extension ne collecte aucune donnée
-
 ### Requirement: Produire des archives sans secret
-La commande `npm run zip` SHALL produire l'archive de l'extension et l'archive de ses sources, et l'archive des sources MUST ne contenir ni le fichier `.env`, ni `node_modules`, ni `.output`, ni le dossier `tests/contract/.karate`.
+La commande `npm run zip` SHALL produire l'archive `readme-capture-X.Y.Z-chrome.zip` de l'extension construite pour Chromium, et cette archive MUST ne contenir ni le fichier `.env`, ni `node_modules`, ni les sources, ni le dossier `tests`.
 
 #### Scenario: Nominal — Archives produites
 - **ÉTANT DONNÉ QUE** le dépôt est à jour et ses dépendances installées
 - **LORSQUE** l'utilisatrice lance `npm run zip`
-- **ALORS** le dossier `.output` contient l'archive `readme-capture-1.0.0-firefox.zip`
-- **ET** il contient l'archive `readme-capture-1.0.0-sources.zip`
+- **ALORS** le dossier `.output` contient l'archive `readme-capture-1.2.0-chrome.zip`
+- **ET** l'archive contient le fichier `manifest.json` à sa racine
 
 #### Scenario: Alternatif — Fichier .env présent
 - **ÉTANT DONNÉ QUE** le fichier `.env` des tests de contrat existe à la racine du dépôt
 - **LORSQUE** l'utilisatrice lance `npm run zip`
-- **ALORS** l'archive des sources ne contient pas le fichier `.env`
+- **ALORS** l'archive de l'extension ne contient pas le fichier `.env`
 
-### Requirement: Reconstruire l'extension depuis ses sources
-L'archive des sources SHALL suffire à reconstruire une archive de l'extension identique, avec `npm ci` puis `npm run zip`, comme l'exige la revue de Mozilla pour un code compilé.
+### Requirement: Installer l'extension non empaquetée dans Dia
+Le dossier issu de l'archive `readme-capture-X.Y.Z-chrome.zip` SHALL se charger dans Dia comme extension non empaquetée, en mode développeur, et l'extension SHALL rester installée après un redémarrage du navigateur.
 
-#### Scenario: Nominal — Reconstruction depuis l'archive des sources
-- **ÉTANT DONNÉ QUE** l'archive des sources est extraite dans un dossier vide
-- **LORSQUE** l'utilisatrice y lance `npm ci` puis `npm run zip`
-- **ALORS** l'archive de l'extension produite a le même contenu que celle produite depuis le dépôt
+#### Scenario: Nominal — Chargement du dossier de l'extension
+- **ÉTANT DONNÉ QUE** l'utilisatrice a décompressé `readme-capture-1.2.0-chrome.zip` dans le dossier `Extensions/readme-capture` de son ordinateur
+- **ET** le mode développeur est activé dans la page des extensions de Dia
+- **LORSQUE** elle clique sur « Charger l'extension non empaquetée » et sélectionne ce dossier
+- **ALORS** l'extension Readme Capture 1.2.0 apparaît dans la liste des extensions
+- **ET** elle est toujours installée après le redémarrage de Dia
 
-### Requirement: Installer la version signée
-Le fichier `.xpi` signé SHALL s'installer dans Zen depuis le gestionnaire de modules, et l'extension SHALL rester installée après un redémarrage du navigateur.
-
-#### Scenario: Nominal — Installation depuis un fichier
-- **ÉTANT DONNÉ QUE** l'utilisatrice a téléchargé le fichier `.xpi` signé depuis addons.mozilla.org
-- **LORSQUE** elle choisit « Installer un module depuis un fichier… » dans `about:addons` et sélectionne ce fichier
-- **ALORS** l'extension Readme Capture apparaît dans la liste des modules
-- **ET** elle est toujours installée après le redémarrage de Zen
-
-#### Scenario: Erreur — Archive non signée
-- **ÉTANT DONNÉ QUE** l'utilisatrice dispose de l'archive `readme-capture-1.0.0-firefox.zip` non signée
-- **LORSQUE** elle tente de l'installer depuis `about:addons`
-- **ALORS** Zen refuse l'installation car le module n'est pas vérifié
+#### Scenario: Erreur — Archive non décompressée
+- **ÉTANT DONNÉ QUE** l'utilisatrice dispose de l'archive `readme-capture-1.2.0-chrome.zip`
+- **LORSQUE** elle tente de charger directement l'archive comme extension non empaquetée
+- **ALORS** Dia ne propose pas l'archive à la sélection, car il attend un dossier
 
 ### Requirement: Conserver la configuration lors d'une mise à jour
-L'installation d'une version signée plus récente SHALL conserver la connexion à Notion enregistrée et la capture en cours.
+Le remplacement du contenu du dossier de l'extension par une version plus récente, suivi de l'actualisation de l'extension dans Dia, SHALL conserver la connexion à Notion enregistrée et la capture en cours.
 
 #### Scenario: Alternatif — Mise à jour vers une version supérieure
-- **ÉTANT DONNÉ QUE** la version 1.0.0 est installée avec une connexion à Notion enregistrée
-- **LORSQUE** l'utilisatrice installe le fichier `.xpi` signé de la version 1.0.1
-- **ALORS** la page d'options affiche la connexion enregistrée
-- **ET** le panneau ne demande pas de configurer la connexion
+- **ÉTANT DONNÉ QUE** la version 1.2.0 est installée depuis le dossier `Extensions/readme-capture`, avec une connexion à Notion enregistrée
+- **LORSQUE** l'utilisatrice remplace le contenu de ce dossier par celui de `readme-capture-1.2.1-chrome.zip` puis actualise l'extension dans la page des extensions de Dia
+- **ALORS** la page des extensions affiche Readme Capture 1.2.1
+- **ET** la page d'options affiche la connexion enregistrée
+
+#### Scenario: Erreur — Mise à jour depuis un autre dossier
+- **ÉTANT DONNÉ QUE** la version 1.2.0 est installée depuis le dossier `Extensions/readme-capture`, avec une connexion à Notion enregistrée
+- **LORSQUE** l'utilisatrice charge la version 1.2.1 depuis le dossier `Téléchargements/readme-capture-1.2.1`
+- **ALORS** Dia affiche deux extensions Readme Capture
+- **ET** le panneau de la version 1.2.1 indique que la connexion à Notion n'est pas configurée

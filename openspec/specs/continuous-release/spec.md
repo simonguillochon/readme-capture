@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Publie automatiquement sur GitHub une version signée et testée de l'extension, sans exposer de secret dans le dépôt public.
+Publie automatiquement sur GitHub une version testée de l'extension, sans exposer de secret dans le dépôt public.
 
 ## Requirements
 
@@ -47,20 +47,13 @@ Sur un push sur `main` dont toutes les vérifications passent, le workflow SHALL
 - **ALORS** aucune release n'est créée
 - **ET** GitHub affiche le commit comme validé
 
-### Requirement: Joindre l'extension signée par Mozilla
-La release SHALL contenir le fichier `readme-capture-X.Y.Z.xpi`, signé par Mozilla en distribution non listée, et aucun autre fichier joint par le workflow.
+### Requirement: Joindre l'archive de l'extension pour Chromium
+La release SHALL contenir le fichier `readme-capture-X.Y.Z-chrome.zip` produit par `npm run zip`, et aucun autre fichier joint par le workflow.
 
 #### Scenario: Nominal — Installer depuis la release
-- **ÉTANT DONNÉ QUE** la release `v1.0.2` est publiée
-- **LORSQUE** l'utilisatrice télécharge `readme-capture-1.0.2.xpi` depuis la release et l'installe dans Zen
-- **ALORS** l'extension Readme Capture 1.0.2 est installée
-- **ET** elle est toujours installée après le redémarrage de Zen
-
-#### Scenario: Erreur — Signature refusée par Mozilla
-- **ÉTANT DONNÉ QUE** Mozilla refuse de signer la version 1.0.2
-- **LORSQUE** le workflow se termine
-- **ALORS** GitHub affiche le commit en échec
-- **ET** ni la release ni le tag `v1.0.2` ne sont créés
+- **ÉTANT DONNÉ QUE** la release `v1.2.0` est publiée
+- **LORSQUE** l'utilisatrice télécharge `readme-capture-1.2.0-chrome.zip` depuis la release, le décompresse dans le dossier de l'extension et la charge dans Dia
+- **ALORS** l'extension Readme Capture 1.2.0 est installée
 
 ### Requirement: Générer les notes de release
 Les notes de la release SHALL être générées par GitHub et contenir le lien de comparaison avec la release précédente.
@@ -71,18 +64,13 @@ Les notes de la release SHALL être générées par GitHub et contenir le lien d
 - **ALORS** ses notes contiennent le lien « Full Changelog » de comparaison entre `v1.0.1` et `v1.0.2`
 - **ET** elles listent les pull requests fusionnées depuis `v1.0.1`, s'il y en a
 
-### Requirement: Ne jamais exposer les secrets
-Le jeton Notion de test, l'ID de la base de test et les clés d'API addons.mozilla.org MUST être lus uniquement depuis les secrets GitHub, et MUST n'apparaître ni dans le dépôt, ni dans les journaux du workflow, ni dans la release.
+### Requirement: Protéger les secrets dans le dépôt public
+Le jeton Notion de test et l'ID de la base de test MUST être lus uniquement depuis les secrets GitHub, et MUST n'apparaître ni dans le dépôt, ni dans les journaux du workflow, ni dans la release.
 
 #### Scenario: Erreur — Secret dans les journaux
-- **ÉTANT DONNÉ QUE** le workflow a lancé les tests de contrat et la signature
+- **ÉTANT DONNÉ QUE** le workflow a lancé les tests de contrat
 - **LORSQUE** une personne extérieure consulte les journaux publics du workflow
 - **ALORS** chaque valeur secrète y apparaît masquée par `***`
-
-#### Scenario: Alternatif — Clés de signature hors de main
-- **ÉTANT DONNÉ QUE** une pull request modifie le workflow pour afficher les clés d'API addons.mozilla.org
-- **LORSQUE** le workflow s'exécute sur cette pull request
-- **ALORS** les clés d'API addons.mozilla.org ne sont pas disponibles pour ce workflow
 
 ### Requirement: Utiliser la base de test une exécution à la fois
 Le workflow SHALL attendre la fin d'une exécution des tests de contrat en cours avant d'en lancer une autre.

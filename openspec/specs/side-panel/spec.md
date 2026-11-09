@@ -6,18 +6,22 @@ Permet à l'utilisatrice d'activer l'extension uniquement pendant ses sessions d
 
 ## Requirements
 
-### Requirement: Ouvrir et fermer le panneau par le bouton de l'extension
-Un clic sur le bouton de l'extension, dans la barre d'URL, SHALL ouvrir le panneau latéral s'il est fermé, et le fermer s'il est ouvert.
+### Requirement: Ouvrir le panneau par le bouton de l'extension
+Un clic sur le bouton de l'extension, dans la barre d'outils du navigateur, SHALL ouvrir le panneau latéral de l'extension s'il est fermé.
 
 #### Scenario: Nominal — Ouvrir le panneau
 - **ÉTANT DONNÉ QUE** le panneau de l'extension est fermé
-- **LORSQUE** l'utilisatrice clique sur le bouton de l'extension dans la barre d'URL
+- **LORSQUE** l'utilisatrice clique sur le bouton de l'extension dans la barre d'outils de Dia
 - **ALORS** le panneau de l'extension s'affiche à côté de la page
+
+### Requirement: Fermer le panneau depuis le navigateur
+Le panneau de l'extension SHALL se fermer avec la commande de fermeture du panneau latéral du navigateur.
 
 #### Scenario: Alternatif — Fermer le panneau
 - **ÉTANT DONNÉ QUE** le panneau de l'extension est ouvert
-- **LORSQUE** l'utilisatrice clique sur le bouton de l'extension dans la barre d'URL
+- **LORSQUE** l'utilisatrice ferme le panneau latéral avec la commande de fermeture de Dia
 - **ALORS** le panneau de l'extension se ferme
+- **ET** la page occupe de nouveau toute la largeur de la fenêtre
 
 ### Requirement: Rester inactive quand le panneau est fermé
 Quand le panneau est fermé, l'extension SHALL ne lire ni ne modifier aucune page web visitée par l'utilisatrice.
