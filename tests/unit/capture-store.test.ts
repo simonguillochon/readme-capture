@@ -51,7 +51,7 @@ describe('isSending', () => {
     expect(isSending({ ...idle, status })).toBe(true);
   });
 
-  it.each(['saving', 'deleting'] as const)('est vrai pendant l’envoi d’un extrait (%s)', (kind) => {
+  it.each(['saving', 'deleting', 'deleting-section'] as const)('est vrai pendant l’envoi d’un extrait ou d’une suppression de section (%s)', (kind) => {
     expect(isSending({ ...idle, busy: { blockId: 'quote-1', kind } })).toBe(true);
   });
 

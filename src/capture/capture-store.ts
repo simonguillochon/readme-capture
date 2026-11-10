@@ -44,9 +44,8 @@ export interface CaptureStore {
   adding: boolean;
   addError: Notice | null;
   editing: { blockId: string; text: string; sectionId: string } | null;
-  busy: { blockId: string; kind: 'saving' | 'deleting' } | null;
+  busy: { blockId: string; kind: 'saving' | 'deleting' | 'deleting-section' } | null;
   extractError: { blockId: string; notice: Notice } | null;
-  sectionError: Notice | null;
   descriptionSaving: boolean;
   descriptionError: Notice | null;
   descriptionConfirmed: boolean;
@@ -78,7 +77,6 @@ function emptyStore(): CaptureStore {
     editing: null,
     busy: null,
     extractError: null,
-    sectionError: null,
     descriptionSaving: false,
     descriptionError: null,
     descriptionConfirmed: false,
@@ -100,7 +98,10 @@ export function hasUnsavedChanges(
   );
 }
 
-/** Vrai pendant tout envoi à Notion : création, enregistrement, ajout, modification ou suppression d'extrait (décision 7). */
+/**
+ * Vrai pendant tout envoi à Notion : création, enregistrement, ajout, modification ou suppression d'extrait, ajout ou
+ * suppression de section (décision 7 ; US-14, design.md, décisions 4 et 5).
+ */
 export function isSending(state: Pick<CaptureStore, 'status' | 'busy' | 'adding' | 'descriptionSaving'>): boolean {
   return (
     state.status === 'creating' || state.status === 'saving' || state.busy !== null || state.adding || state.descriptionSaving

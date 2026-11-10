@@ -90,6 +90,34 @@ Feature: Contrat de l'API Notion pour l'ajout d'extraits dans le corps d'un item
     When method patch
     Then status 200
 
+  # US-14, design.md, décision 6.
+  Scenario: Un titre seul ajouté en fin de page renvoie un identifiant et devient le dernier enfant
+    Given path 'blocks', pageId, 'children'
+    And request { children: ['#(heading2("Le constat"))', '#(quote("Culture is what people do when no one is watching."))'], position: { type: 'end' } }
+    When method patch
+    Then status 200
+
+    * def heading1 = function(text) { return { type: 'heading_1', heading_1: { rich_text: [{ type: 'text', text: { content: text } }] } } }
+    Given path 'blocks', pageId, 'children'
+    And request { children: ['#(heading1("Some Notes on Nomenclature"))'], position: { type: 'end' } }
+    When method patch
+    Then status 200
+    And match response.results == '#[1]'
+    And match response.results[0].type == 'heading_1'
+    * def headingId = response.results[0].id
+
+    Given path 'blocks', pageId, 'children'
+    When method get
+    Then status 200
+    And match response.results[*].type == ['heading_2', 'quote', 'heading_1']
+    And match response.results[2].id == headingId
+    And match response.results[2].heading_1.rich_text[0].plain_text == 'Some Notes on Nomenclature'
+
+    Given path 'pages', pageId
+    And request { in_trash: true }
+    When method patch
+    Then status 200
+
   Scenario: Un ajout sur un item mis à la corbeille renvoie 400 ou 404
     Given path 'pages', pageId
     And request { in_trash: true }

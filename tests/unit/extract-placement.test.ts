@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { deleteExtract, editExtract, placeExtract, type ExtractState } from '@/capture/extract-placement';
+import {
+  deleteExtract,
+  deleteSectionChange,
+  editExtract,
+  placeExtract,
+  placeSection,
+  sectionContents,
+  sectionDeletionMessage,
+  sectionDepths,
+  sectionLabel,
+  type ExtractState,
+} from '@/capture/extract-placement';
 import { headingBlock, quoteBlock } from '@/notion/extract-blocks';
 
 const empty: ExtractState = { sections: [], extracts: [] };
@@ -76,6 +87,84 @@ describe('placeExtract', () => {
   it('garde les extraits sans section en tête après un ajout sans section', () => {
     const state = placeExtract(filled, { kind: 'none' }, 'Nouveau').apply(['citation-libre-2']);
     expect(state.extracts.map((extract) => extract.blockId)).toEqual(['citation-libre', 'citation-libre-2', 'citation-constat']);
+  });
+});
+
+describe('placeSection', () => {
+  it('écrit seulement le titre, sans espaces en début et fin, en fin de page', () => {
+    const placement = placeSection(filled, '  Some Notes on Nomenclature ', 1);
+    expect(placement.blocks).toEqual([headingBlock('Some Notes on Nomenclature', 1)]);
+    expect(placement.position).toEqual({ type: 'end' });
+  });
+
+  it('ajoute la section à la fin des sections, sans toucher aux extraits', () => {
+    const state = placeSection(filled, 'Les limites', 3).apply(['titre-limites']);
+    expect(state.sections).toEqual([...filled.sections, { id: 'titre-limites', title: 'Les limites', level: 3 }]);
+    expect(state.extracts).toEqual(filled.extracts);
+  });
+});
+
+describe('sectionLabel', () => {
+  it('préfixe le titre par son niveau', () => {
+    expect(sectionLabel({ id: 'titre', title: 'Some Notes on Nomenclature', level: 1 })).toBe('H1 · Some Notes on Nomenclature');
+    expect(sectionLabel({ id: 'titre', title: 'Les leviers', level: 2 })).toBe('H2 · Les leviers');
+  });
+});
+
+const sectionsOf = (...levels: (1 | 2 | 3)[]) => levels.map((level, index) => ({ id: `s${index}`, title: `Section ${index}`, level }));
+
+describe('sectionDepths', () => {
+  it.each([
+    [[1, 2, 3], [0, 1, 2]],
+    [[2], [0]],
+    [[1, 2, 1, 3], [0, 1, 0, 1]],
+    [[1, 3, 2], [0, 1, 1]],
+    [[2, 1, 2], [0, 0, 1]],
+  ] as const)('niveaux %j → profondeurs %j', (levels, expected) => {
+    const sections = sectionsOf(...levels);
+    expect(sections.map((section) => sectionDepths(sections).get(section.id))).toEqual(expected);
+  });
+});
+
+// Page : « Nomenclature » (H1) avec une citation, « Experimentation » (H2) avec une citation, « Definitions » (H3) vide,
+// puis « Overview » (H1) avec une citation.
+const nested: ExtractState = {
+  sections: [
+    { id: 'titre-nomenclature', title: 'Some Notes on Nomenclature', level: 1 },
+    { id: 'titre-experimentation', title: '– Experimentation', level: 2 },
+    { id: 'titre-definitions', title: 'Definitions', level: 3 },
+    { id: 'titre-overview', title: 'Overview', level: 1 },
+  ],
+  extracts: [
+    { blockId: 'citation-libre', sectionId: null, text: 'Extrait libre', highlight: null },
+    { blockId: 'citation-nomenclature', sectionId: 'titre-nomenclature', text: 'Nomenclature', highlight: null },
+    { blockId: 'citation-experimentation', sectionId: 'titre-experimentation', text: 'Experimentation', highlight: null },
+    { blockId: 'citation-overview', sectionId: 'titre-overview', text: 'Overview', highlight: null },
+  ],
+};
+
+describe('sectionContents', () => {
+  it('renvoie les sections de niveau plus bas qui suivent, jusqu’à une section de niveau égal ou supérieur, et leurs extraits', () => {
+    const contents = sectionContents(nested, 'titre-nomenclature');
+    expect(contents.sections.map((section) => section.id)).toEqual(['titre-experimentation', 'titre-definitions']);
+    expect(contents.extracts.map((extract) => extract.blockId)).toEqual(['citation-nomenclature', 'citation-experimentation']);
+  });
+
+  it('s’arrête à une section de même niveau', () => {
+    const contents = sectionContents(nested, 'titre-definitions');
+    expect(contents).toEqual({ sections: [], extracts: [] });
+  });
+
+  it('renvoie les seuls extraits d’une section sans sous-section', () => {
+    const contents = sectionContents(nested, 'titre-overview');
+    expect(contents.sections).toEqual([]);
+    expect(contents.extracts.map((extract) => extract.blockId)).toEqual(['citation-overview']);
+  });
+
+  it('s’arrête à une section de niveau supérieur', () => {
+    const contents = sectionContents(nested, 'titre-experimentation');
+    expect(contents.sections.map((section) => section.id)).toEqual(['titre-definitions']);
+    expect(contents.extracts.map((extract) => extract.blockId)).toEqual(['citation-experimentation']);
   });
 });
 
@@ -157,9 +246,11 @@ describe('editExtract', () => {
     const change = editExtract(withoutFree, 'citation-leviers', 'Extrait des leviers', null);
     expect(change.operations[0]).toEqual({ kind: 'append', blocks: [quoteBlock('Extrait des leviers')], position: { type: 'start' } });
 
-    const state = change.apply(3, 'citation-deplacee');
+    expect(change.operations).toHaveLength(2);
+
+    const state = change.apply(2, 'citation-deplacee');
     expect(ids(state)).toEqual(['citation-deplacee', 'citation-constat-1', 'citation-constat-2']);
-    expect(state.sections.map((section) => section.id)).toEqual(['titre-constat']);
+    expect(state.sections).toEqual(page.sections);
   });
 
   it('écrit le texte modifié dans la nouvelle section', () => {
@@ -168,16 +259,15 @@ describe('editExtract', () => {
     expect(change.apply(2, 'citation-deplacee').extracts.at(-1)?.text).toBe('Texte corrigé');
   });
 
-  it('supprime le titre de l’ancienne section quand son dernier extrait est déplacé', () => {
+  it('garde le titre de l’ancienne section quand son dernier extrait est déplacé', () => {
     const change = editExtract(page, 'citation-leviers', 'Extrait des leviers', 'titre-constat');
     expect(change.operations).toEqual([
       { kind: 'append', blocks: [quoteBlock('Extrait des leviers')], position: { type: 'after_block', after_block: { id: 'citation-constat-2' } } },
       { kind: 'delete-quote', blockId: 'citation-leviers' },
-      { kind: 'delete-section', sectionId: 'titre-leviers' },
     ]);
 
-    const state = change.apply(3, 'citation-deplacee');
-    expect(state.sections.map((section) => section.id)).toEqual(['titre-constat']);
+    const state = change.apply(2, 'citation-deplacee');
+    expect(state.sections).toEqual(page.sections);
     expect(ids(state)).toEqual(['citation-libre', 'citation-constat-1', 'citation-constat-2', 'citation-deplacee']);
   });
 
@@ -197,12 +287,6 @@ describe('editExtract', () => {
     expect(ids(state)).toEqual(['citation-libre', 'citation-constat-1', 'citation-constat-2', 'citation-deplacee', 'citation-leviers']);
     expect(state.sections).toEqual(page.sections);
   });
-
-  it('garde la section vidée quand la suppression de son titre échoue', () => {
-    const state = editExtract(page, 'citation-leviers', 'Extrait des leviers', 'titre-constat').apply(2, 'citation-deplacee');
-    expect(state.sections).toEqual(page.sections);
-    expect(state.extracts.some((extract) => extract.sectionId === 'titre-leviers')).toBe(false);
-  });
 });
 
 describe('deleteExtract', () => {
@@ -215,15 +299,12 @@ describe('deleteExtract', () => {
     expect(ids(state)).toEqual(['citation-libre', 'citation-constat-2', 'citation-leviers']);
   });
 
-  it('supprime la citation puis le titre de la section quand c’est son dernier extrait', () => {
+  it('supprime seulement la citation et garde le titre de la section quand c’est son dernier extrait', () => {
     const change = deleteExtract(page, 'citation-leviers');
-    expect(change.operations).toEqual([
-      { kind: 'delete-quote', blockId: 'citation-leviers' },
-      { kind: 'delete-section', sectionId: 'titre-leviers' },
-    ]);
+    expect(change.operations).toEqual([{ kind: 'delete-quote', blockId: 'citation-leviers' }]);
 
-    const state = change.apply(2);
-    expect(state.sections.map((section) => section.id)).toEqual(['titre-constat']);
+    const state = change.apply(1);
+    expect(state.sections).toEqual(page.sections);
     expect(ids(state)).toEqual(['citation-libre', 'citation-constat-1', 'citation-constat-2']);
   });
 
@@ -233,13 +314,58 @@ describe('deleteExtract', () => {
     expect(change.apply(1)).toEqual({ sections: page.sections, extracts: page.extracts.slice(1) });
   });
 
-  it('garde la section vidée quand la suppression de son titre échoue', () => {
-    const state = deleteExtract(page, 'citation-leviers').apply(1);
-    expect(state.sections).toEqual(page.sections);
-    expect(ids(state)).toEqual(['citation-libre', 'citation-constat-1', 'citation-constat-2']);
-  });
-
   it('ne change rien à l’état quand la suppression de la citation échoue', () => {
     expect(deleteExtract(page, 'citation-constat-1').apply(0)).toBe(page);
+  });
+});
+
+describe('deleteSectionChange', () => {
+  it('supprime les citations dans l’ordre de la page, puis les sections contenues de la dernière à la première, puis la section', () => {
+    expect(deleteSectionChange(nested, 'titre-nomenclature').operations).toEqual([
+      { kind: 'delete-quote', blockId: 'citation-nomenclature' },
+      { kind: 'delete-quote', blockId: 'citation-experimentation' },
+      { kind: 'delete-section', sectionId: 'titre-definitions' },
+      { kind: 'delete-section', sectionId: 'titre-experimentation' },
+      { kind: 'delete-section', sectionId: 'titre-nomenclature' },
+    ]);
+  });
+
+  it('retire la section et tout son contenu de l’état, sans toucher au reste', () => {
+    const state = deleteSectionChange(nested, 'titre-nomenclature').apply(5);
+    expect(state.sections.map((section) => section.id)).toEqual(['titre-overview']);
+    expect(ids(state)).toEqual(['citation-libre', 'citation-overview']);
+  });
+
+  it('ne retire que les blocs des opérations réussies après un échec en cours de route', () => {
+    const change = deleteSectionChange(nested, 'titre-nomenclature');
+    const afterFirstQuote = change.apply(1);
+    expect(afterFirstQuote.sections).toEqual(nested.sections);
+    expect(ids(afterFirstQuote)).toEqual(['citation-libre', 'citation-experimentation', 'citation-overview']);
+
+    const afterDefinitions = change.apply(3);
+    expect(afterDefinitions.sections.map((section) => section.id)).toEqual(['titre-nomenclature', 'titre-experimentation', 'titre-overview']);
+    expect(ids(afterDefinitions)).toEqual(['citation-libre', 'citation-overview']);
+  });
+
+  it('ne change rien à l’état quand la première opération échoue', () => {
+    expect(deleteSectionChange(nested, 'titre-nomenclature').apply(0)).toBe(nested);
+  });
+
+  it('supprime seulement le titre d’une section vide', () => {
+    const change = deleteSectionChange(nested, 'titre-definitions');
+    expect(change.operations).toEqual([{ kind: 'delete-section', sectionId: 'titre-definitions' }]);
+    expect(change.apply(1).sections.map((section) => section.id)).toEqual(['titre-nomenclature', 'titre-experimentation', 'titre-overview']);
+  });
+});
+
+describe('sectionDeletionMessage', () => {
+  it.each([
+    [2, 1, 'Cette section contient 2 citations et 1 section, qui seront supprimées de Notion.'],
+    [1, 0, 'Cette section contient 1 citation, qui sera supprimée de Notion.'],
+    [0, 2, 'Cette section contient 2 sections, qui seront supprimées de Notion.'],
+    [0, 1, 'Cette section contient 1 section, qui sera supprimée de Notion.'],
+    [1, 1, 'Cette section contient 1 citation et 1 section, qui seront supprimées de Notion.'],
+  ])('%i citation(s) et %i section(s)', (quotes, sections, message) => {
+    expect(sectionDeletionMessage(quotes, sections)).toBe(message);
   });
 });

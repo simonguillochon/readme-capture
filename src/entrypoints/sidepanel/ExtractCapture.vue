@@ -14,20 +14,27 @@ import DsTextarea from '@/components/DsTextarea.vue';
 import { finishCapture, useCaptureStore } from '@/capture/capture-store';
 import {
   deleteExtract,
+  deleteSectionChange,
   editExtract,
   placeExtract,
+  placeSection,
+  sameTitle,
+  sectionContents,
+  sectionDeletionMessage,
+  sectionDepths,
+  sectionLabel,
   type Extract,
   type ExtractChange,
   type ExtractOperation,
   type ExtractTarget,
+  type Section,
 } from '@/capture/extract-placement';
 import { watchActiveTabSelection, type SelectionMessage, type SelectionWatch } from '@/capture/selection-watcher';
 import type { NotionConfig } from '@/config/notion-config';
-import { NotionHttpError } from '@/notion/client';
 import { failureNotice, RATE_LIMITED_NOTICE } from '@/notion/error-actions';
 import { errorMessage, itemErrorMessage } from '@/notion/errors';
 import type { HeadingLevel } from '@/notion/extract-blocks';
-import { appendBlocks, deleteBlock, updateQuote } from '@/notion/extracts';
+import { appendBlocks, deleteBlock, isAlreadyDeleted, updateQuote } from '@/notion/extracts';
 import { withRateLimitRetry } from '@/notion/retry';
 
 const props = defineProps<{ config: NotionConfig; pageId: string }>();
@@ -37,6 +44,14 @@ const LEVELS: { value: '1' | '2' | '3'; label: string }[] = [
   { value: '2', label: 'H2' },
   { value: '3', label: 'H3' },
 ];
+
+// Style du titre de section selon son niveau, et retrait selon sa profondeur (US-14, design.md, décision 5).
+const HEADING_CLASSES: Record<HeadingLevel, string> = {
+  1: 'text-body font-semibold text-text-primary',
+  2: 'text-body-s font-medium text-text-primary',
+  3: 'text-caption text-text-secondary',
+};
+const INDENTS = ['', 'pl-3', 'pl-6'];
 
 const store = useCaptureStore();
 
@@ -52,6 +67,8 @@ const lastUsed = toRef(store, 'lastUsed');
 const newSection = ref<{ title: string; level: '1' | '2' | '3' | null }>({ title: '', level: '1' });
 
 const adding = toRef(store, 'adding');
+// Vrai si l'ajout en cours est celui d'une section seule, pour afficher « Ajout en cours… » sur son bouton (US-14, décision 4).
+const addingSection = ref(false);
 const error = toRef(store, 'addError');
 
 // Texte du dernier extrait ajouté : l'état « Extrait ajouté » dure jusqu'à une sélection différente.
@@ -61,12 +78,13 @@ let addedText: string | null = null;
 const editing = toRef(store, 'editing');
 // Action en cours d'envoi : toutes les actions de la liste et « Ajouter l'extrait » sont inactives (US-07, décision 4).
 const busy = toRef(store, 'busy');
-// Erreur affichée sous un extrait, et erreur de suppression d'un titre de section, affichée sous la liste.
+// Erreur affichée sous un extrait, ou sous le titre d'une section dont la suppression a échoué (US-14, décision 5).
 const extractError = toRef(store, 'extractError');
-const sectionError = toRef(store, 'sectionError');
+// Section dont la confirmation de suppression est affichée : une seule à la fois (US-14, décision 5).
+const confirmingSection = ref<string | null>(null);
 
 const sectionOptions = computed(() => [
-  ...sections.value.map((section) => ({ value: section.id, label: section.title })),
+  ...sections.value.map((section) => ({ value: section.id, label: sectionLabel(section) })),
   { value: 'new', label: '+ Nouvelle section…' },
   { value: 'none', label: 'Sans section' },
 ]);
@@ -76,18 +94,23 @@ watch(chosen, (value) => {
   if (value === 'new') newSection.value = { title: selection.value?.nearestHeading ?? '', level: '1' };
 });
 
-// Extraits groupés dans l'ordre de la page : sans section d'abord, puis section par section (décision 7).
-const groups = computed(() => [
-  { section: null, extracts: extracts.value.filter((extract) => extract.sectionId === null) },
-  ...sections.value.map((section) => ({
-    section,
-    extracts: extracts.value.filter((extract) => extract.sectionId === section.id),
-  })),
-]);
+// Extraits groupés dans l'ordre de la page : sans section d'abord, puis section par section, sections vides comprises,
+// avec la profondeur de chaque section (décision 7 ; US-14, décision 5).
+const groups = computed(() => {
+  const depths = sectionDepths(sections.value);
+  return [
+    { section: null, depth: 0, extracts: extracts.value.filter((extract) => extract.sectionId === null) },
+    ...sections.value.map((section) => ({
+      section,
+      depth: depths.get(section.id) ?? 0,
+      extracts: extracts.value.filter((extract) => extract.sectionId === section.id),
+    })),
+  ];
+});
 
 // Menu Section du mode modification : les sections dans l'ordre de création, puis « Sans section » (US-07, décision 6).
 const editSectionOptions = computed(() => [
-  ...sections.value.map((section) => ({ value: section.id, label: section.title })),
+  ...sections.value.map((section) => ({ value: section.id, label: sectionLabel(section) })),
   { value: 'none', label: 'Sans section' },
 ]);
 
@@ -97,6 +120,22 @@ const canAdd = computed(
     !adding.value &&
     busy.value === null &&
     (chosen.value !== 'new' || (newSection.value.title.trim() !== '' && newSection.value.level !== null)),
+);
+
+// Titre de la nouvelle section identique à celui d'une section existante (US-14, décision 4).
+const sectionExists = computed(
+  () => chosen.value === 'new' && sections.value.some((section) => sameTitle(section.title, newSection.value.title)),
+);
+
+// « Ajouter la section seule » : aucun passage sélectionné n'est requis (US-14, décision 4).
+const canAddSection = computed(
+  () =>
+    chosen.value === 'new' &&
+    newSection.value.title.trim() !== '' &&
+    newSection.value.level !== null &&
+    !sectionExists.value &&
+    !adding.value &&
+    busy.value === null,
 );
 
 // Actions « Modifier » et « Supprimer » : inactives pendant une modification ou un envoi (US-07, décisions 4 et 6).
@@ -153,11 +192,10 @@ async function addExtract() {
   await add(text, target());
 }
 
-// Relance du dernier ajout, de la dernière modification ou suppression, et de la dernière suppression de titre échoués,
-// depuis l'état courant (US-10, design.md, décision 5).
+// Relance du dernier ajout et de la dernière modification ou suppression échoués, depuis l'état courant
+// (US-10, design.md, décision 5).
 let retryAdd: () => Promise<void> = async () => {};
 let retryExtract: () => Promise<void> = async () => {};
-let retrySection: () => Promise<void> = async () => {};
 
 async function add(text: string, extractTarget: ExtractTarget) {
   if (adding.value || busy.value !== null) return;
@@ -189,6 +227,39 @@ async function add(text: string, extractTarget: ExtractTarget) {
   adding.value = false;
 }
 
+/**
+ * Écrit le titre seul de la nouvelle section en fin de page, puis la pré-sélectionne (US-14, design.md, décision 4).
+ * En cas d'échec, le titre et le niveau saisis sont conservés.
+ */
+async function addSection() {
+  if (!canAddSection.value) return;
+  await addHeading(newSection.value.title, Number(newSection.value.level) as HeadingLevel);
+}
+
+async function addHeading(title: string, level: HeadingLevel) {
+  if (adding.value || busy.value !== null) return;
+  const placement = placeSection({ sections: sections.value, extracts: extracts.value }, title, level);
+  adding.value = true;
+  addingSection.value = true;
+  error.value = null;
+  try {
+    const blockIds = await withRateLimitRetry(
+      () => appendBlocks(props.config, props.pageId, placement.blocks, placement.position),
+      () => (error.value = RATE_LIMITED_NOTICE),
+    );
+    error.value = null;
+    sections.value = placement.apply(blockIds).sections;
+    lastUsed.value = blockIds[0]!;
+    chosen.value = lastUsed.value;
+    newSection.value.title = '';
+  } catch (caught) {
+    error.value = failureNotice(itemErrorMessage(caught), 'item');
+    retryAdd = () => addHeading(title, level);
+  }
+  adding.value = false;
+  addingSection.value = false;
+}
+
 function startEditing(extract: Extract) {
   extractError.value = null;
   editing.value = { blockId: extract.blockId, text: extract.text, sectionId: extract.sectionId ?? 'none' };
@@ -215,36 +286,31 @@ async function send(operation: ExtractOperation): Promise<string | undefined> {
 async function run(
   change: ExtractChange,
   blockId: string,
-  kind: 'saving' | 'deleting',
+  kind: 'saving' | 'deleting' | 'deleting-section',
   retryFromStart: () => Promise<void>,
 ): Promise<number> {
   busy.value = { blockId, kind };
   extractError.value = null;
-  sectionError.value = null;
   let completed = 0;
   let newBlockId: string | undefined;
   for (const operation of change.operations) {
     // Chaque appel réessaie de son côté en cas de limitation (US-10, design.md, décision 2).
-    const onRateLimited = () => {
-      if (operation.kind === 'delete-section') sectionError.value = RATE_LIMITED_NOTICE;
-      else extractError.value = { blockId, notice: RATE_LIMITED_NOTICE };
-    };
+    const onRateLimited = () => (extractError.value = { blockId, notice: RATE_LIMITED_NOTICE });
     try {
       newBlockId = (await withRateLimitRetry(() => send(operation), onRateLimited)) ?? newBlockId;
       extractError.value = null;
-      sectionError.value = null;
     } catch (caught) {
-      const gone = caught instanceof NotionHttpError && (caught.status === 400 || caught.status === 404);
       extractError.value = null;
-      sectionError.value = null;
       if (operation.kind === 'update' || operation.kind === 'append') {
         extractError.value = { blockId, notice: failureNotice(itemErrorMessage(caught), 'extract') };
         retryExtract = retryFromStart;
         break;
       }
-      if (!gone) {
-        if (operation.kind === 'delete-quote') {
-          extractError.value = { blockId, notice: failureNotice(errorMessage(caught), 'extract') };
+      if (!isAlreadyDeleted(caught)) {
+        extractError.value = { blockId, notice: failureNotice(errorMessage(caught), 'extract') };
+        // Une suppression de section reprend sur ce qui reste de la section (US-14, décision 5).
+        if (kind === 'deleting-section') retryExtract = retryFromStart;
+        else if (operation.kind === 'delete-quote') {
           // Reste à supprimer l'ancienne citation : après un déplacement, sans retirer le surlignage de l'extrait déplacé.
           const quoteId = operation.blockId;
           retryExtract = async () => {
@@ -252,12 +318,6 @@ async function run(
             if (!extract) return;
             if (kind === 'deleting') await removeExtract(extract);
             else await run(deleteExtract(currentState(), quoteId), quoteId, 'deleting', retryExtract);
-          };
-        } else {
-          sectionError.value = failureNotice(errorMessage(caught), 'extract');
-          const { sectionId } = operation;
-          retrySection = async () => {
-            if (busy.value === null) await run(deleteSection(sectionId), sectionId, 'deleting', retrySection);
           };
         }
         break;
@@ -281,15 +341,6 @@ async function run(
 
 const currentState = () => ({ sections: sections.value, extracts: extracts.value });
 
-/** Suppression du seul titre d'une section restée vide, relancée après un échec. */
-function deleteSection(sectionId: string): ExtractChange {
-  const state = currentState();
-  return {
-    operations: [{ kind: 'delete-section', sectionId }],
-    apply: (completed) => (completed === 0 ? state : { ...state, sections: state.sections.filter((section) => section.id !== sectionId) }),
-  };
-}
-
 /** Enregistre le texte ou la section modifiés ; en cas d'échec, la modification en cours est conservée. */
 async function saveExtract() {
   const current = editing.value;
@@ -311,6 +362,37 @@ async function removeExtract(extract: Extract) {
   const change = deleteExtract(currentState(), extract.blockId);
   const completed = await run(change, extract.blockId, 'deleting', () => removeExtract(extract));
   if (completed > 0 && extract.highlight) selectionWatch?.unhighlight(extract.highlight);
+}
+
+/** « Supprimer la section » : immédiat pour une section vide, sinon après confirmation (US-14, décision 5). */
+function askSectionDeletion(section: Section) {
+  const contents = sectionContents(currentState(), section.id);
+  if (contents.sections.length === 0 && contents.extracts.length === 0) {
+    confirmingSection.value = null;
+    void removeSection(section.id);
+  } else confirmingSection.value = section.id;
+}
+
+/** Message de confirmation de la suppression d'une section, selon son contenu. */
+function deletionMessage(sectionId: string): string {
+  const contents = sectionContents(currentState(), sectionId);
+  return sectionDeletionMessage(contents.extracts.length, contents.sections.length);
+}
+
+/**
+ * Supprime la section et tout son contenu, puis retire le surlignage des extraits supprimés (US-14, décision 5).
+ * En cas d'échec, les blocs déjà supprimés sont retirés de la liste ; « Réessayer » reprend sur ce qui reste.
+ */
+async function removeSection(sectionId: string) {
+  if (busy.value !== null || !sections.value.some((section) => section.id === sectionId)) return;
+  const before = extracts.value;
+  await run(deleteSectionChange(currentState(), sectionId), sectionId, 'deleting-section', () => removeSection(sectionId));
+  confirmingSection.value = null;
+  for (const extract of before) {
+    if (extract.highlight && !extracts.value.some((candidate) => candidate.blockId === extract.blockId)) {
+      selectionWatch?.unhighlight(extract.highlight);
+    }
+  }
 }
 </script>
 
@@ -335,9 +417,15 @@ async function removeExtract(extract: Extract) {
       <DsField label="Titre de la section" for="extract-section-title">
         <DsInput id="extract-section-title" v-model="newSection.title" />
       </DsField>
+      <DsMessage v-if="sectionExists" variant="warning">Cette section existe déjà</DsMessage>
       <fieldset class="flex flex-col gap-2">
         <legend class="mb-2 text-caption text-text-secondary">Niveau</legend>
         <DsChoiceGroup v-model="newSection.level" label="Niveau" :options="LEVELS" />
+        <div>
+          <DsButton variant="secondary" size="sm" :disabled="!canAddSection" @click="addSection">
+            {{ addingSection ? 'Ajout en cours…' : 'Ajouter la section seule' }}
+          </DsButton>
+        </div>
       </fieldset>
     </template>
     <div class="flex flex-col gap-2">
@@ -350,13 +438,42 @@ async function removeExtract(extract: Extract) {
         @finish="() => finishCapture()"
       />
       <div>
-        <DsButton size="sm" :disabled="!canAdd" @click="addExtract">{{ adding ? 'Ajout en cours…' : "Ajouter l'extrait" }}</DsButton>
+        <DsButton size="sm" :disabled="!canAdd" @click="addExtract">{{ adding && !addingSection ? 'Ajout en cours…' : "Ajouter l'extrait" }}</DsButton>
       </div>
     </div>
-    <div v-if="extracts.length > 0" class="flex flex-col gap-4">
+    <div v-if="extracts.length > 0 || sections.length > 0" class="flex flex-col gap-4">
       <template v-for="group in groups" :key="group.section?.id ?? 'none'">
-        <div v-if="group.section || group.extracts.length > 0" class="flex flex-col gap-2">
-          <p v-if="group.section" class="text-caption text-text-secondary">{{ group.section.title }}</p>
+        <div v-if="group.section || group.extracts.length > 0" class="flex flex-col gap-2" :class="INDENTS[group.depth]">
+          <template v-if="group.section">
+            <div class="flex items-center gap-2">
+              <p class="flex-1" :class="HEADING_CLASSES[group.section.level]">{{ group.section.title }}</p>
+              <DsIconButton
+                icon="trash"
+                :label="
+                  busy?.kind === 'deleting-section' && busy.blockId === group.section.id ? 'Suppression en cours…' : 'Supprimer la section'
+                "
+                variant="ghost"
+                :disabled="actionsDisabled"
+                @click="askSectionDeletion(group.section)"
+              />
+            </div>
+            <div v-if="confirmingSection === group.section.id" class="flex flex-col gap-2">
+              <DsMessage variant="warning">{{ deletionMessage(group.section.id) }}</DsMessage>
+              <div class="flex gap-2">
+                <DsButton size="sm" :disabled="actionsDisabled" @click="removeSection(group.section.id)">
+                  {{ busy?.kind === 'deleting-section' && busy.blockId === group.section.id ? 'Suppression en cours…' : 'Supprimer la section' }}
+                </DsButton>
+                <DsButton variant="secondary" size="sm" :disabled="busy !== null" @click="confirmingSection = null">Annuler</DsButton>
+              </div>
+            </div>
+            <ErrorNotice
+              v-if="extractError?.blockId === group.section.id"
+              :message="extractError.notice.message"
+              :action="extractError.notice.action"
+              :busy="busy !== null"
+              @retry="() => retryExtract()"
+            />
+          </template>
           <ul class="flex flex-col gap-2">
             <li v-for="extract in group.extracts" :key="extract.blockId" class="flex flex-col gap-2">
               <template v-if="editing?.blockId === extract.blockId">
@@ -400,12 +517,5 @@ async function removeExtract(extract: Extract) {
         </div>
       </template>
     </div>
-    <ErrorNotice
-      v-if="sectionError"
-      :message="sectionError.message"
-      :action="sectionError.action"
-      :busy="busy !== null"
-      @retry="() => retrySection()"
-    />
   </section>
 </template>

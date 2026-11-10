@@ -3,7 +3,7 @@ import type { NotionConfig } from '@/config/notion-config';
 import { NotionHttpError, NotionNetworkError } from '@/notion/client';
 import { itemErrorMessage } from '@/notion/errors';
 import { headingBlock, quoteBlock } from '@/notion/extract-blocks';
-import { appendBlocks, deleteBlock, updateQuote } from '@/notion/extracts';
+import { appendBlocks, deleteBlock, isAlreadyDeleted, updateQuote } from '@/notion/extracts';
 
 const PAGE_ID = '11111111-2222-3333-4444-555555555555';
 
@@ -113,5 +113,19 @@ describe('deleteBlock', () => {
     stubFetch(() => Promise.reject(new TypeError('NetworkError')));
 
     await expect(deleteBlock(config, 'citation')).rejects.toBeInstanceOf(NotionNetworkError);
+  });
+});
+
+describe('isAlreadyDeleted', () => {
+  it.each([400, 404])('compte une réponse %i comme une suppression réussie', (status) => {
+    expect(isAlreadyDeleted(new NotionHttpError(status, null))).toBe(true);
+  });
+
+  it('ne compte pas une autre réponse comme une suppression réussie', () => {
+    expect(isAlreadyDeleted(new NotionHttpError(500, null))).toBe(false);
+  });
+
+  it('ne compte pas une erreur réseau comme une suppression réussie', () => {
+    expect(isAlreadyDeleted(new NotionNetworkError())).toBe(false);
   });
 });

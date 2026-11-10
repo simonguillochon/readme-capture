@@ -45,7 +45,8 @@ export interface Placement {
   apply(blockIds: string[]): ExtractState;
 }
 
-const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+/** Vrai si deux titres de section sont identiques, sans tenir compte de la casse ni des espaces en début et fin. */
+export const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 const after = (id: string): BlockPosition => ({ type: 'after_block', after_block: { id } });
 
@@ -93,6 +94,50 @@ export function placeExtract(state: ExtractState, target: ExtractTarget, text: s
   };
 }
 
+/** Titre seul d'une nouvelle section, écrit en fin de page (US-14, design.md, décision 2). */
+export function placeSection(state: ExtractState, title: string, level: HeadingLevel): Placement {
+  const trimmed = title.trim();
+  return {
+    blocks: [headingBlock(trimmed, level)],
+    position: { type: 'end' },
+    apply: ([headingId]) => ({ ...state, sections: [...state.sections, { id: headingId!, title: trimmed, level }] }),
+  };
+}
+
+/** Libellé d'une section dans les menus Section : « H2 · Titre » (US-14, design.md, décision 2). */
+export function sectionLabel(section: Section): string {
+  return `H${section.level} · ${section.title}`;
+}
+
+/**
+ * Profondeur de chaque section dans la hiérarchie de la page : nombre de sections qui la contiennent
+ * (US-14, design.md, décision 2).
+ */
+export function sectionDepths(sections: Section[]): Map<string, number> {
+  const depths = new Map<string, number>();
+  const stack: HeadingLevel[] = [];
+  for (const section of sections) {
+    while (stack.length > 0 && stack.at(-1)! >= section.level) stack.pop();
+    depths.set(section.id, stack.length);
+    stack.push(section.level);
+  }
+  return depths;
+}
+
+/**
+ * Sections contenues dans une section, à tous les niveaux, et extraits de la section et de ces sections, dans l'ordre
+ * de la page (US-14, design.md, décision 2).
+ */
+export function sectionContents(state: ExtractState, sectionId: string): { sections: Section[]; extracts: Extract[] } {
+  const index = state.sections.findIndex((section) => section.id === sectionId);
+  const level = state.sections[index]!.level;
+  const following = state.sections.slice(index + 1);
+  const end = following.findIndex((section) => section.level <= level);
+  const sections = end === -1 ? following : following.slice(0, end);
+  const ids = new Set([sectionId, ...sections.map((section) => section.id)]);
+  return { sections, extracts: state.extracts.filter((extract) => extract.sectionId !== null && ids.has(extract.sectionId)) };
+}
+
 /** Appel Notion d'une modification, d'un déplacement ou d'une suppression (US-07, design.md, décision 3). */
 export type ExtractOperation =
   | { kind: 'update'; blockId: string; text: string }
@@ -110,21 +155,10 @@ export interface ExtractChange {
   apply(completed: number, newBlockId?: string): ExtractState;
 }
 
-/** Retire la section si plus aucun extrait n'y est rangé. */
-function withoutEmptySection(state: ExtractState, sectionId: string | null): ExtractState {
-  if (sectionId === null || state.extracts.some((extract) => extract.sectionId === sectionId)) return state;
-  return { ...state, sections: state.sections.filter((section) => section.id !== sectionId) };
-}
-
-/** Suppression du titre d'une section, si elle est vide dans `state`. */
-function emptySectionOperations(state: ExtractState, sectionId: string | null): ExtractOperation[] {
-  return withoutEmptySection(state, sectionId) === state ? [] : [{ kind: 'delete-section', sectionId: sectionId! }];
-}
-
 /**
  * Opérations et nouvel état d'un extrait modifié (US-07, design.md, décision 3). Dans la même section, la citation est
- * mise à jour ; dans une autre section, elle est écrite à l'emplacement de `placeExtract`, puis l'ancienne est supprimée,
- * ainsi que le titre de l'ancienne section si elle est vide.
+ * mise à jour ; dans une autre section, elle est écrite à l'emplacement de `placeExtract`, puis l'ancienne est supprimée.
+ * L'ancienne section est conservée, même vide (US-14, design.md, décision 2).
  */
 export function editExtract(state: ExtractState, blockId: string, text: string, sectionId: string | null): ExtractChange {
   const extract = state.extracts.find((candidate) => candidate.blockId === blockId)!;
@@ -145,7 +179,6 @@ export function editExtract(state: ExtractState, blockId: string, text: string, 
   const operations: ExtractOperation[] = [
     { kind: 'append', blocks, position },
     { kind: 'delete-quote', blockId },
-    ...emptySectionOperations(others, extract.sectionId),
   ];
 
   return {
@@ -154,26 +187,56 @@ export function editExtract(state: ExtractState, blockId: string, text: string, 
       if (completed === 0) return state;
       const moved: Extract = { ...extract, blockId: newBlockId!, sectionId, text };
       const kept = completed === 1 ? state.extracts : others.extracts;
-      const next: ExtractState = { ...state, extracts: sortByPage([...kept, moved], state.sections) };
-      return completed === operations.length ? withoutEmptySection(next, extract.sectionId) : next;
+      return { ...state, extracts: sortByPage([...kept, moved], state.sections) };
     },
   };
 }
 
 /**
- * Opérations et nouvel état d'un extrait supprimé : suppression de sa citation, puis du titre de sa section si elle est
- * vide (US-07, design.md, décision 3).
+ * Opérations et nouvel état d'un extrait supprimé : suppression de sa citation ; sa section est conservée, même vide
+ * (US-07, design.md, décision 3 ; US-14, décision 2).
  */
 export function deleteExtract(state: ExtractState, blockId: string): ExtractChange {
   const extract = state.extracts.find((candidate) => candidate.blockId === blockId)!;
   const others: ExtractState = { ...state, extracts: state.extracts.filter((candidate) => candidate !== extract) };
-  const operations: ExtractOperation[] = [{ kind: 'delete-quote', blockId }, ...emptySectionOperations(others, extract.sectionId)];
+  return {
+    operations: [{ kind: 'delete-quote', blockId }],
+    apply: (completed) => (completed === 0 ? state : others),
+  };
+}
+
+/**
+ * Opérations et nouvel état d'une section supprimée avec tout son contenu (US-14, design.md, décision 2) : ses citations
+ * et celles des sections qu'elle contient, dans l'ordre de la page, puis les titres des sections contenues, de la
+ * dernière à la première, puis son propre titre. Un échec en cours de route laisse la section avec ce qui reste.
+ */
+export function deleteSectionChange(state: ExtractState, sectionId: string): ExtractChange {
+  const contents = sectionContents(state, sectionId);
+  const quoteIds = contents.extracts.map((extract) => extract.blockId);
+  const sectionIds = [...contents.sections.map((section) => section.id).reverse(), sectionId];
+  // Identifiants des blocs supprimés, dans l'ordre des opérations.
+  const blockIds = [...quoteIds, ...sectionIds];
 
   return {
-    operations,
+    operations: [
+      ...quoteIds.map((blockId): ExtractOperation => ({ kind: 'delete-quote', blockId })),
+      ...sectionIds.map((id): ExtractOperation => ({ kind: 'delete-section', sectionId: id })),
+    ],
     apply: (completed) => {
       if (completed === 0) return state;
-      return completed === operations.length ? withoutEmptySection(others, extract.sectionId) : others;
+      const removed = new Set(blockIds.slice(0, completed));
+      return {
+        sections: state.sections.filter((section) => !removed.has(section.id)),
+        extracts: state.extracts.filter((extract) => !removed.has(extract.blockId)),
+      };
     },
   };
+}
+
+/** Message de confirmation de la suppression d'une section non vide (US-14, design.md, décision 2). */
+export function sectionDeletionMessage(quotes: number, sections: number): string {
+  const count = (value: number, noun: string) => `${value} ${noun}${value > 1 ? 's' : ''}`;
+  const parts = [quotes > 0 ? count(quotes, 'citation') : null, sections > 0 ? count(sections, 'section') : null].filter(Boolean);
+  const verb = quotes + sections === 1 ? 'qui sera supprimée' : 'qui seront supprimées';
+  return `Cette section contient ${parts.join(' et ')}, ${verb} de Notion.`;
 }
