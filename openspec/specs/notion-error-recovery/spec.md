@@ -68,7 +68,7 @@ Quand la lecture des thèmes échoue sur « Connexion impossible », « Notion n
 - **ALORS** le champ « Thèmes » propose les thèmes de la base
 
 ### Requirement: Proposer de terminer une capture dont l'item n'existe plus
-Quand l'enregistrement des métadonnées, l'ajout d'un extrait ou l'enregistrement de la description échoue sur « Item introuvable dans Notion », le panneau SHALL afficher sous le message un bouton « Terminer la capture » qui termine la capture sans demander de confirmation.
+Quand l'enregistrement des métadonnées, l'ajout d'un extrait, l'ajout d'une section seule ou l'enregistrement de la description échoue sur « Item introuvable dans Notion », le panneau SHALL afficher sous le message un bouton « Terminer la capture » qui termine la capture sans demander de confirmation.
 
 #### Scenario: Nominal — Item mis à la corbeille avec une description en cours
 - **ÉTANT DONNÉ QUE** l'utilisatrice a mis l'item à la corbeille dans Notion
@@ -76,6 +76,11 @@ Quand l'enregistrement des métadonnées, l'ajout d'un extrait ou l'enregistreme
 - **LORSQUE** elle clique sur « Terminer la capture »
 - **ALORS** le panneau affiche le formulaire de préparation, pré-rempli depuis l'onglet actif
 - **ET** aucun message de confirmation ne s'affiche
+
+#### Scenario: Alternatif — Item mis à la corbeille avant l'ajout d'une section
+- **ÉTANT DONNÉ QUE** l'utilisatrice a mis l'item à la corbeille dans Notion
+- **LORSQUE** l'ajout d'une section seule échoue sur « Item introuvable dans Notion »
+- **ALORS** le bouton « Terminer la capture » s'affiche sous le message
 
 ### Requirement: Ne pas proposer de terminer pour un extrait introuvable
 Quand la modification d'un extrait échoue sur « Item introuvable dans Notion », le panneau SHALL afficher le message sans bouton « Terminer la capture » ni « Réessayer ».
